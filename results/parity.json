@@ -1,0 +1,212 @@
+{
+  "tts_uk_female": {
+    "hf": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "depth": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "fast": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "tts_us_male": {
+    "hf": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "depth": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "fast": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "tts_us_female": {
+    "hf": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "depth": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "fast": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "tts_uk_male": {
+    "hf": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "depth": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "fast": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "chat_text": {
+    "hf": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "depth": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "fast": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "chat_audio": {
+    "hf": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "depth": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "fast": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  }
+}

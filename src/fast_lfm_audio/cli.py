@@ -1,0 +1,57 @@
+import argparse
+from pathlib import Path
+
+import soundfile as sf
+import torch
+
+from .pipeline import VOICES, Pipeline
+
+
+def main():
+    parser = argparse.ArgumentParser(description="LFM2.5 Audio inference with CUDA graphs and fast-mimi")
+    parser.add_argument("--task", choices=("tts", "chat", "asr"), default="tts")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--text")
+    source.add_argument("--audio", type=Path)
+    parser.add_argument("--voice", choices=VOICES, default="UK female")
+    parser.add_argument("--output", type=Path, default=Path("output.wav"))
+    parser.add_argument("--codec", choices=("fast-mimi", "lfm"), default="fast-mimi")
+    parser.add_argument("--max-new-tokens", type=int, default=512)
+    parser.add_argument("--max-cache-len", type=int, default=2048)
+    parser.add_argument("--depth-only", action="store_true")
+    parser.add_argument("--audio-temperature", type=float, default=0.0)
+    parser.add_argument("--audio-top-k", type=int, default=1)
+    args = parser.parse_args()
+    if args.task == "asr" and args.audio is None:
+        parser.error("--audio is required for ASR")
+    if args.task == "tts" and args.audio is not None:
+        parser.error("TTS takes --text; --audio is supported for chat and ASR")
+    if args.audio is not None and not args.audio.is_file():
+        parser.error(f"Audio file not found: {args.audio}")
+    if args.text is not None and not args.text.strip():
+        parser.error("--text must not be empty")
+    if args.audio is None and args.text is None:
+        args.text = "Hello, this is a test of fast audio generation."
+    torch.set_num_threads(4)
+    pipeline = Pipeline(codec=args.codec, backbone=not args.depth_only, max_cache_len=args.max_cache_len)
+    inputs = pipeline.prepare(task=args.task, voice=args.voice, text=args.text, audio=args.audio)
+    text, waveform, output = pipeline.generate(
+        inputs,
+        generation_mode="interleaved" if args.task == "chat" else "sequential",
+        max_new_tokens=args.max_new_tokens,
+        text_top_k=1,
+        audio_top_k=args.audio_top_k,
+        audio_temperature=args.audio_temperature,
+    )
+    if text:
+        print(text)
+    if waveform.numel():
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        sf.write(args.output, waveform[0].float().cpu().numpy(), 24000)
+        print(f"Audio: {args.output.resolve()} ({waveform.shape[-1] / 24000:.2f} s)")
+    if output.modalities.shape[-1] == args.max_new_tokens:
+        print("Token limit reached; output may be incomplete.")
+
+
+if __name__ == "__main__":
+    main()

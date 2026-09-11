@@ -1,0 +1,16 @@
+{
+  "source": "vendor/liquid-audio/assets/question.wav",
+  "source_sha256": "c904eda981f41dd49fe3bb75e961ec48cdba9b45ff3381812adaec04f3b17930",
+  "source_seconds": 4.9039375,
+  "sampling_rate": 16000,
+  "seconds": [
+    5,
+    20,
+    100
+  ],
+  "files": {
+    "question_100s.wav": "93203bb7dcdb92dcb10d914c2baaf1b58c7e78358f91fb5f646e48ecf11f72fe",
+    "question_20s.wav": "ccb5343ea964fc5f978674ce63d3d7e23b41c92d34236774f380ddb55dae5ce3",
+    "question_5s.wav": "7eae41f0a3a478bb89313c2ccd5e1ecfeba9d71742fcbda40a3b3685a4b90eab"
+  }
+}

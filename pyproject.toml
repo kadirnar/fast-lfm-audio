@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fast-lfm-audio"
+version = "0.1.0"
+description = "CUDA graph inference for LFM2.5 Audio using Transformers PR 48249 and fast-mimi"
+requires-python = ">=3.12"
+dependencies = ["torch>=2.13", "transformers>=5.16.0.dev0", "fast-mimi", "accelerate", "huggingface-hub", "soundfile"]
+
+[project.scripts]
+fast-lfm-audio = "fast_lfm_audio.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

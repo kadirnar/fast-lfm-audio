@@ -1,0 +1,16 @@
+{
+  "engine": "fast",
+  "task": "tts",
+  "text_words": 300,
+  "max_new_tokens": 1251,
+  "max_cache_len": 4096,
+  "decoded_frames": 1250,
+  "mimi_padded_frames": 2048,
+  "prepare_ms": 12.336007000158133,
+  "generation_ms": 11003.14108099974,
+  "decode_ms": 266752.60697300016,
+  "total_ms": 277768.0840610001,
+  "first_audio_token_ms": 809.1414489999806,
+  "audio_seconds": 100.0,
+  "note": "Initial 100-second probe before the final repeated benchmark. First use of the 2048-frame decoder bucket triggered fast-mimi convolution autotuning. Smaller-shape and Triton disk caches already existed. Not a fully clean-install cold measurement. Timings are the synchronized Runner.run output."
+}

@@ -1,0 +1,535 @@
+{
+  "engine": "liquid",
+  "setup_seconds": 2.10003038800005,
+  "environment": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti",
+    "gpu_total_bytes": 16643194880,
+    "python": "3.13.14",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0",
+    "packages": {
+      "transformers": "5.16.0.dev0",
+      "fast-mimi": "1.0.0",
+      "liquid-audio": "1.3.0",
+      "torchaudio": "2.11.0"
+    },
+    "commits": {
+      "transformers": "843101f38c800b98d49b704215f0b76b92e48e64",
+      "fast-mimi": "f6825daa223d2851d6918561f5fde02cf28d6d9e",
+      "liquid-audio": "19e65845923a7f136442c95137884ec61eb386aa"
+    },
+    "model_revision": "c362a0625dfe45aa588dce5f0ada28a7e5707628",
+    "cpu_threads": 4,
+    "dtype": "bfloat16",
+    "text_top_k": 1,
+    "audio_top_k": 1
+  },
+  "max_new_tokens": 512,
+  "max_cache_len": 4096,
+  "cases": {
+    "tts_5s": {
+      "request": {
+        "prompt": "Perform TTS. Use the UK female voice.",
+        "text": "On Saturday morning, Emma opened the windows and listened to the quiet street below. She had promised to meet her friend at the library, but there was still plenty of time for breakfast. She filled the kettle, sliced some bread,",
+        "task": "tts",
+        "target_seconds": 5,
+        "target_frames": 63,
+        "max_new_tokens": 64,
+        "duration_method": "Real autoregressive prefix; one audio-start token plus N audio frames. EOS unchanged."
+      },
+      "max_new_tokens": 64,
+      "cold": {
+        "prepare_ms": 6.6660750007940806,
+        "generation_ms": 2667.1571609995226,
+        "decode_ms": 88.42103900042275,
+        "total_ms": 2762.2442750007394,
+        "first_audio_token_ms": 537.1967339997354,
+        "audio_seconds": 5.04
+      },
+      "samples": [
+        {
+          "prepare_ms": 1.153873000475869,
+          "generation_ms": 2199.3602570000803,
+          "decode_ms": 5.006645999856119,
+          "total_ms": 2205.5207760004123,
+          "first_audio_token_ms": 52.36773000069661,
+          "audio_seconds": 5.04
+        },
+        {
+          "prepare_ms": 1.057568999385694,
+          "generation_ms": 2215.846084000077,
+          "decode_ms": 4.83507799981453,
+          "total_ms": 2221.7387309992773,
+          "first_audio_token_ms": 51.64321400025074,
+          "audio_seconds": 5.04
+        },
+        {
+          "prepare_ms": 1.0439429997859406,
+          "generation_ms": 2205.1902530001826,
+          "decode_ms": 4.872860999967088,
+          "total_ms": 2211.1070569999356,
+          "first_audio_token_ms": 52.40748999949574,
+          "audio_seconds": 5.04
+        },
+        {
+          "prepare_ms": 1.0368290004407754,
+          "generation_ms": 2213.7285359995076,
+          "decode_ms": 4.88101600058144,
+          "total_ms": 2219.64638100053,
+          "first_audio_token_ms": 51.35207200055447,
+          "audio_seconds": 5.04
+        },
+        {
+          "prepare_ms": 1.027090999741631,
+          "generation_ms": 2213.0514340005902,
+          "decode_ms": 5.173853999622224,
+          "total_ms": 2219.252378999954,
+          "first_audio_token_ms": 51.89370300013252,
+          "audio_seconds": 5.04
+        }
+      ],
+      "median": {
+        "prepare_ms": 1.0439429997859406,
+        "generation_ms": 2213.0514340005902,
+        "decode_ms": 4.88101600058144,
+        "total_ms": 2219.252378999954,
+        "first_audio_token_ms": 51.89370300013252,
+        "audio_seconds": 5.04,
+        "rtf": 0.4403278529761814,
+        "events_per_second": 28.91934593870037
+      },
+      "p95_total_ms": 2221.320260999528,
+      "events": 64,
+      "audio_frames": 63,
+      "limit_reached": true,
+      "repeat_exact": true,
+      "hashes": {
+        "sequences": "b1b0bee5378188f5250138bcce25855f2617f9c55b20b9628e13d367c47404a9",
+        "audio_codes": "74e06088a3217e4ea6cc212358203b144e3bf941b62f0f670dbb55ec62508d92",
+        "modalities": "320b7a68685e41214c2b0f89b0a91d688aa3c4960c0ed8a1e89412945eaacd6d"
+      },
+      "peak_allocated_bytes": 3402093056,
+      "peak_reserved_bytes": 6387924992
+    },
+    "tts_20s": {
+      "request": {
+        "prompt": "Perform TTS. Use the UK female voice.",
+        "text": "On Saturday morning, Emma opened the windows and listened to the quiet street below. She had promised to meet her friend at the library, but there was still plenty of time for breakfast. She filled the kettle, sliced some bread, and placed a small notebook beside her cup. The notebook contained a list of places she wanted to visit during the coming year. Some were close enough for an afternoon walk, while others would require a train ticket and a little more planning. At half past nine, she put on her coat and stepped outside. The air was cool, and",
+        "task": "tts",
+        "target_seconds": 20,
+        "target_frames": 250,
+        "max_new_tokens": 251,
+        "duration_method": "Real autoregressive prefix; one audio-start token plus N audio frames. EOS unchanged."
+      },
+      "max_new_tokens": 251,
+      "cold": {
+        "prepare_ms": 1.645560999349982,
+        "generation_ms": 8624.52837300043,
+        "decode_ms": 9.91574199997558,
+        "total_ms": 8636.089675999756,
+        "first_audio_token_ms": 53.91383599999244,
+        "audio_seconds": 20.0
+      },
+      "samples": [
+        {
+          "prepare_ms": 1.1304270001346595,
+          "generation_ms": 8653.266225000152,
+          "decode_ms": 9.47582099979627,
+          "total_ms": 8663.872473000083,
+          "first_audio_token_ms": 52.06164799983526,
+          "audio_seconds": 20.0
+        },
+        {
+          "prepare_ms": 1.3324720002856338,
+          "generation_ms": 8619.133375999809,
+          "decode_ms": 9.57298399953288,
+          "total_ms": 8630.038831999627,
+          "first_audio_token_ms": 51.5470849995836,
+          "audio_seconds": 20.0
+        },
+        {
+          "prepare_ms": 1.154122000116331,
+          "generation_ms": 8669.75377200015,
+          "decode_ms": 9.798080999644299,
+          "total_ms": 8680.70597499991,
+          "first_audio_token_ms": 51.89425600019604,
+          "audio_seconds": 20.0
+        },
+        {
+          "prepare_ms": 1.1562859999685315,
+          "generation_ms": 8616.406862000076,
+          "decode_ms": 9.501804000137781,
+          "total_ms": 8627.064952000183,
+          "first_audio_token_ms": 51.792088999718544,
+          "audio_seconds": 20.0
+        },
+        {
+          "prepare_ms": 1.150084000073548,
+          "generation_ms": 8669.624790999478,
+          "decode_ms": 9.273987000597117,
+          "total_ms": 8680.048862000149,
+          "first_audio_token_ms": 52.269759999944654,
+          "audio_seconds": 20.0
+        }
+      ],
+      "median": {
+        "prepare_ms": 1.154122000116331,
+        "generation_ms": 8653.266225000152,
+        "decode_ms": 9.501804000137781,
+        "total_ms": 8663.872473000083,
+        "first_audio_token_ms": 51.89425600019604,
+        "audio_seconds": 20.0,
+        "rtf": 0.43319362365000413,
+        "events_per_second": 29.006388278548034
+      },
+      "p95_total_ms": 8680.574552399958,
+      "events": 251,
+      "audio_frames": 250,
+      "limit_reached": true,
+      "repeat_exact": true,
+      "hashes": {
+        "sequences": "b1b0bee5378188f5250138bcce25855f2617f9c55b20b9628e13d367c47404a9",
+        "audio_codes": "e1a748316bdfc1c35d8421e58364003295cf1d0f2481ee27ace7fb4d04694332",
+        "modalities": "392dc3d7497de140a3ea2b8a1352b09bc5bfe936c92048706e7b35ae3ee48111"
+      },
+      "peak_allocated_bytes": 3463890944,
+      "peak_reserved_bytes": 6387924992
+    },
+    "tts_100s": {
+      "request": {
+        "prompt": "Perform TTS. Use the UK female voice.",
+        "text": "On Saturday morning, Emma opened the windows and listened to the quiet street below. She had promised to meet her friend at the library, but there was still plenty of time for breakfast. She filled the kettle, sliced some bread, and placed a small notebook beside her cup. The notebook contained a list of places she wanted to visit during the coming year. Some were close enough for an afternoon walk, while others would require a train ticket and a little more planning. At half past nine, she put on her coat and stepped outside. The air was cool, and the pavement was still damp from the rain. A delivery driver was arranging boxes near the corner shop. Further along the road, two neighbors were discussing the new community garden. Emma stopped to read the notice on its gate. Volunteers would meet every Sunday to prepare the soil, plant vegetables, and repair the wooden benches. She wrote the meeting time in her notebook before continuing. The library stood beside a small square with a fountain in the middle. Inside, the reading room was bright and peaceful. Her friend Daniel was already sitting by the window with a stack of books about architecture. They were planning a walking tour for a group of visitors and wanted to learn more about the oldest buildings in town. One book included photographs taken almost a century earlier. They compared the pictures with a recent map and marked the streets that had changed the most. The old cinema had become a concert hall, and the former post office now housed a collection of local paintings. After an hour of reading, they took a break at a nearby cafe. Daniel ordered a glass of water and a sandwich. Emma chose soup and another cup of tea.",
+        "task": "tts",
+        "target_seconds": 100,
+        "target_frames": 1250,
+        "max_new_tokens": 1251,
+        "duration_method": "Real autoregressive prefix; one audio-start token plus N audio frames. EOS unchanged."
+      },
+      "max_new_tokens": 1251,
+      "cold": {
+        "prepare_ms": 1.9714800000656396,
+        "generation_ms": 43139.08520899986,
+        "decode_ms": 82.97911600038788,
+        "total_ms": 43224.03580500031,
+        "first_audio_token_ms": 56.5866629995071,
+        "audio_seconds": 100.0
+      },
+      "samples": [
+        {
+          "prepare_ms": 1.5054199993755901,
+          "generation_ms": 43260.86221700007,
+          "decode_ms": 82.70328500020696,
+          "total_ms": 43345.07092199965,
+          "first_audio_token_ms": 54.83970600016619,
+          "audio_seconds": 100.0
+        },
+        {
+          "prepare_ms": 1.506861000052595,
+          "generation_ms": 42961.847216000024,
+          "decode_ms": 81.75579100043251,
+          "total_ms": 43045.10986800051,
+          "first_audio_token_ms": 55.21053299980849,
+          "audio_seconds": 100.0
+        },
+        {
+          "prepare_ms": 1.4990350000516628,
+          "generation_ms": 44207.93282100021,
+          "decode_ms": 81.34136799981206,
+          "total_ms": 44290.77322400008,
+          "first_audio_token_ms": 55.11962299988227,
+          "audio_seconds": 100.0
+        },
+        {
+          "prepare_ms": 1.7242220001207897,
+          "generation_ms": 45160.86699900006,
+          "decode_ms": 82.40894900063722,
+          "total_ms": 45245.00017000082,
+          "first_audio_token_ms": 56.31095800072217,
+          "audio_seconds": 100.0
+        },
+        {
+          "prepare_ms": 1.5922000002319692,
+          "generation_ms": 45479.70603900012,
+          "decode_ms": 81.90957299939328,
+          "total_ms": 45563.207811999746,
+          "first_audio_token_ms": 55.59771899970656,
+          "audio_seconds": 100.0
+        }
+      ],
+      "median": {
+        "prepare_ms": 1.506861000052595,
+        "generation_ms": 44207.93282100021,
+        "decode_ms": 81.90957299939328,
+        "total_ms": 44290.77322400008,
+        "first_audio_token_ms": 55.21053299980849,
+        "audio_seconds": 100.0,
+        "rtf": 0.4429077322400008,
+        "events_per_second": 28.298088604716078
+      },
+      "p95_total_ms": 45499.56628359996,
+      "events": 1251,
+      "audio_frames": 1250,
+      "limit_reached": true,
+      "repeat_exact": true,
+      "hashes": {
+        "sequences": "b1b0bee5378188f5250138bcce25855f2617f9c55b20b9628e13d367c47404a9",
+        "audio_codes": "79418df2c2a244f99374cd333198682a85d3c071698032347c3d754a344cebda",
+        "modalities": "a73d83a0edc92a870da428f788ebfca53aaae782b254bd20cf6b64e3d3b67f34"
+      },
+      "peak_allocated_bytes": 4470586880,
+      "peak_reserved_bytes": 7065305088
+    },
+    "chat_5s": {
+      "request": {
+        "prompt": "Respond with interleaved text and audio.",
+        "audio": "results/durations/inputs/question_5s.wav",
+        "mode": "interleaved",
+        "task": "chat",
+        "input_seconds": 5,
+        "max_new_tokens": 512,
+        "duration_method": "Upstream question tiled and cropped to exact input length; synthetic repeated speech."
+      },
+      "max_new_tokens": 512,
+      "cold": {
+        "prepare_ms": 26.495832000364317,
+        "generation_ms": 6409.819993999918,
+        "decode_ms": 8.817021000140812,
+        "total_ms": 6445.132847000423,
+        "first_audio_token_ms": 212.57274900017364,
+        "audio_seconds": 13.76
+      },
+      "samples": [
+        {
+          "prepare_ms": 2.6068289998875116,
+          "generation_ms": 6524.319201999788,
+          "decode_ms": 7.334501000514138,
+          "total_ms": 6534.260532000189,
+          "first_audio_token_ms": 116.26453499957279,
+          "audio_seconds": 13.76
+        },
+        {
+          "prepare_ms": 2.31547400017007,
+          "generation_ms": 6224.308380000366,
+          "decode_ms": 7.1611009998377995,
+          "total_ms": 6233.784955000374,
+          "first_audio_token_ms": 101.56716799974674,
+          "audio_seconds": 13.76
+        },
+        {
+          "prepare_ms": 2.414001999568427,
+          "generation_ms": 6231.540593000318,
+          "decode_ms": 6.674745000054827,
+          "total_ms": 6240.629339999941,
+          "first_audio_token_ms": 104.12531499969191,
+          "audio_seconds": 13.76
+        },
+        {
+          "prepare_ms": 2.1996929999659187,
+          "generation_ms": 6164.410406999195,
+          "decode_ms": 7.1763980004107,
+          "total_ms": 6173.786497999572,
+          "first_audio_token_ms": 101.00103500008117,
+          "audio_seconds": 13.76
+        },
+        {
+          "prepare_ms": 2.346883000427624,
+          "generation_ms": 6218.003215999488,
+          "decode_ms": 6.629737999901408,
+          "total_ms": 6226.979836999817,
+          "first_audio_token_ms": 100.3487159996439,
+          "audio_seconds": 13.76
+        }
+      ],
+      "median": {
+        "prepare_ms": 2.346883000427624,
+        "generation_ms": 6224.308380000366,
+        "decode_ms": 7.1611009998377995,
+        "total_ms": 6233.784955000374,
+        "first_audio_token_ms": 101.56716799974674,
+        "audio_seconds": 13.76,
+        "rtf": 0.4530366973110737,
+        "events_per_second": 33.256706988542206
+      },
+      "p95_total_ms": 6475.53429360014,
+      "events": 207,
+      "audio_frames": 173,
+      "limit_reached": false,
+      "repeat_exact": true,
+      "hashes": {
+        "sequences": "facb3c3125b4ee0e9c97446fd6ab15d66b74d4a1e969dbb86e3692247b3ae8be",
+        "audio_codes": "aa41344bd078514f7ce068cfa875251d6a111b39d58925aa056dfe4e4dac5c06",
+        "modalities": "699c22e16e4ed6f1d1a086d839ec72c4612fc379127794f2468a966395d6d8d8"
+      },
+      "peak_allocated_bytes": 3453630464,
+      "peak_reserved_bytes": 7065305088
+    },
+    "chat_20s": {
+      "request": {
+        "prompt": "Respond with interleaved text and audio.",
+        "audio": "results/durations/inputs/question_20s.wav",
+        "mode": "interleaved",
+        "task": "chat",
+        "input_seconds": 20,
+        "max_new_tokens": 512,
+        "duration_method": "Upstream question tiled and cropped to exact input length; synthetic repeated speech."
+      },
+      "max_new_tokens": 512,
+      "cold": {
+        "prepare_ms": 4.023592000521603,
+        "generation_ms": 16151.668874999814,
+        "decode_ms": 19.686765000187734,
+        "total_ms": 16175.379232000523,
+        "first_audio_token_ms": 116.06408399984502,
+        "audio_seconds": 36.88
+      },
+      "samples": [
+        {
+          "prepare_ms": 2.7997740007776883,
+          "generation_ms": 16235.310564999963,
+          "decode_ms": 19.078333999459574,
+          "total_ms": 16257.1886730002,
+          "first_audio_token_ms": 102.57921700031147,
+          "audio_seconds": 36.88
+        },
+        {
+          "prepare_ms": 2.936072000011336,
+          "generation_ms": 16253.643889999694,
+          "decode_ms": 19.27089699984208,
+          "total_ms": 16275.850858999547,
+          "first_audio_token_ms": 103.65890899993246,
+          "audio_seconds": 36.88
+        },
+        {
+          "prepare_ms": 2.7314129993101233,
+          "generation_ms": 16100.36289800064,
+          "decode_ms": 19.071834999522252,
+          "total_ms": 16122.166145999472,
+          "first_audio_token_ms": 103.25390900015918,
+          "audio_seconds": 36.88
+        },
+        {
+          "prepare_ms": 2.7761380006268155,
+          "generation_ms": 16208.445848999872,
+          "decode_ms": 19.07220100019913,
+          "total_ms": 16230.294188000698,
+          "first_audio_token_ms": 102.71374199965067,
+          "audio_seconds": 36.88
+        },
+        {
+          "prepare_ms": 2.856438999515376,
+          "generation_ms": 16130.237927000053,
+          "decode_ms": 19.223735999730707,
+          "total_ms": 16152.318101999299,
+          "first_audio_token_ms": 102.67105100047047,
+          "audio_seconds": 36.88
+        }
+      ],
+      "median": {
+        "prepare_ms": 2.7997740007776883,
+        "generation_ms": 16208.445848999872,
+        "decode_ms": 19.078333999459574,
+        "total_ms": 16230.294188000698,
+        "first_audio_token_ms": 102.71374199965067,
+        "audio_seconds": 36.88,
+        "rtf": 0.44008389880696036,
+        "events_per_second": 31.58846966389393
+      },
+      "p95_total_ms": 16272.118421799678,
+      "events": 512,
+      "audio_frames": 461,
+      "limit_reached": true,
+      "repeat_exact": true,
+      "hashes": {
+        "sequences": "b3ed9f4ee9ae1e4fdabafe1b583ae842de84dc6a72b8c519e748059405228753",
+        "audio_codes": "dd07f74879a079db5b46d8ae0838ed2d34e60eba1d2cb9770ae4e931a614cdc9",
+        "modalities": "c491691c74d8b56b31547cc64965abc0601d89bee8d541a94f3b22e76e4563a5"
+      },
+      "peak_allocated_bytes": 3563166720,
+      "peak_reserved_bytes": 7065305088
+    },
+    "chat_100s": {
+      "request": {
+        "prompt": "Respond with interleaved text and audio.",
+        "audio": "results/durations/inputs/question_100s.wav",
+        "mode": "interleaved",
+        "task": "chat",
+        "input_seconds": 100,
+        "max_new_tokens": 512,
+        "duration_method": "Upstream question tiled and cropped to exact input length; synthetic repeated speech."
+      },
+      "max_new_tokens": 512,
+      "cold": {
+        "prepare_ms": 7.6822299997729715,
+        "generation_ms": 9899.476081000103,
+        "decode_ms": 10.41219800026738,
+        "total_ms": 9917.570509000143,
+        "first_audio_token_ms": 142.74075899993477,
+        "audio_seconds": 21.6
+      },
+      "samples": [
+        {
+          "prepare_ms": 5.870426000001316,
+          "generation_ms": 9855.264379999426,
+          "decode_ms": 10.142324000298686,
+          "total_ms": 9871.277129999726,
+          "first_audio_token_ms": 138.65090100080124,
+          "audio_seconds": 21.6
+        },
+        {
+          "prepare_ms": 5.854095000358939,
+          "generation_ms": 9873.212880999745,
+          "decode_ms": 10.336753000046883,
+          "total_ms": 9889.40372900015,
+          "first_audio_token_ms": 138.1582089998119,
+          "audio_seconds": 21.6
+        },
+        {
+          "prepare_ms": 5.968742000732163,
+          "generation_ms": 9841.941831999975,
+          "decode_ms": 9.760696999364882,
+          "total_ms": 9857.671271000072,
+          "first_audio_token_ms": 137.50190800055861,
+          "audio_seconds": 21.6
+        },
+        {
+          "prepare_ms": 6.053994000467355,
+          "generation_ms": 9921.08129799999,
+          "decode_ms": 10.216982999736501,
+          "total_ms": 9937.352275000194,
+          "first_audio_token_ms": 138.99571299953095,
+          "audio_seconds": 21.6
+        },
+        {
+          "prepare_ms": 5.769613000666141,
+          "generation_ms": 9868.8425069995,
+          "decode_ms": 10.168740000153775,
+          "total_ms": 9884.780860000319,
+          "first_audio_token_ms": 137.74594599999546,
+          "audio_seconds": 21.6
+        }
+      ],
+      "median": {
+        "prepare_ms": 5.870426000001316,
+        "generation_ms": 9868.8425069995,
+        "decode_ms": 10.168740000153775,
+        "total_ms": 9884.780860000319,
+        "first_audio_token_ms": 138.1582089998119,
+        "audio_seconds": 21.6,
+        "rtf": 0.4576287435185333,
+        "events_per_second": 34.65451999638617
+      },
+      "p95_total_ms": 9927.762565800185,
+      "events": 342,
+      "audio_frames": 271,
+      "limit_reached": false,
+      "repeat_exact": true,
+      "hashes": {
+        "sequences": "57ce4b65ae0bb43d4d79891db7cbcbea0b4f1d81620dcd64ec105d21daf96fb8",
+        "audio_codes": "d5f5592241880f632927cfa90a76ace54ba250529286f433c96bc52ba699977b",
+        "modalities": "f5afc49fce0cf37ccfa45291a057cf53239ab31bddd7275069e8890911cb890a"
+      },
+      "peak_allocated_bytes": 3735906816,
+      "peak_reserved_bytes": 7065305088
+    }
+  }
+}
