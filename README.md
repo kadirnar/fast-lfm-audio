@@ -84,6 +84,31 @@ Default: one first request and five warm repeats, batch one, greedy sampling.
 GPU processes run sequentially. Reports separate preparation, generation,
 decoding, first audio token, cold latency, memory, and token parity.
 
+### End-to-End Latency
+
+Measured on RTX 5070 Ti: median of five warm requests, batch one, greedy sampling.
+End-to-end includes input preparation, token generation, and full waveform
+decoding. Model loading, first-use graph capture/kernel tuning, and audio
+recording/playback are excluded. These are complete-output latencies, not time
+to first audio.
+
+| Task | Input audio (s) | Output audio (s) | Liquid Audio E2E (s) | Fast LFM Audio E2E (s) | Speedup |
+| --- | --- | --- | --- | --- | --- |
+| TTS | - | 5.04 | 2.219 | 0.513 | 4.33x |
+| TTS | - | 20.00 | 8.664 | 2.011 | 4.31x |
+| TTS (stress test) | - | 100.00 | 44.291 | 10.039 | 4.41x |
+| Voice chat | 5 | 13.76 | 6.234 | 1.546 | 4.03x |
+| Voice chat | 20 | 36.88 | 16.230 | 3.918 | 4.14x |
+| Voice chat | 100 | 21.60 | 9.885 | 2.526 | 3.91x |
+
+TTS rows are duration-capped prefixes, not naturally completed utterances; the
+5-second target produces 5.04 seconds. Chat inputs repeat/crop the same 4.904-second
+recording. Output lengths vary; the 20-second chat case reaches its 512-event
+limit, so that response is partial.
+
+**100-second TTS warning:** both engines produce a roughly 70-second low-signal
+tail. This is a compute stress test, not 100 seconds of successful continuous speech.
+
 - [Standard results](results/REPORT.md): about 4x faster on the measured cases.
 - [5/20/100-second results](results/durations/REPORT.md): TTS output lengths and
   repeated-speech chat input lengths, with waveform checks.
