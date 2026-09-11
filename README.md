@@ -70,6 +70,9 @@ with `backend="vllm"` or `"sglang"` in their matching environment. Keep the
 RTX 5070 Ti, PyTorch 2.13.0, BF16, batch one. Median of five warm requests.
 All three use CUDA graphs and fast-mimi. **Transformers is the optimized version in this repo.**
 
+Selective Depthformer fusion reduces total latency by **14-21%** versus the previous
+graph-only version, with identical tokens in all 18 cases. [Before / after](results/optimization/REPORT.md).
+
 **Processing time:** input preparation + generation + full audio decoding.
 Lower is better. Model loading, first-use setup, file writing, and recording/playback are excluded.
 
@@ -77,9 +80,9 @@ Lower is better. Model loading, first-use setup, file writing, and recording/pla
 
 | Generated Audio | Transformers | vLLM | SGLang |
 | ---: | ---: | ---: | ---: |
-| 5.04 s | **0.513 s** | 0.578 s | 0.556 s |
-| 20.00 s | **2.010 s** | 2.258 s | 2.133 s |
-| 100.00 s* | **10.029 s** | 11.364 s | 10.851 s |
+| 5.04 s | **0.406 s** | 0.477 s | 0.454 s |
+| 20.00 s | **1.587 s** | 1.854 s | 1.725 s |
+| 100.00 s* | **7.907 s** | 9.248 s | 8.519 s |
 
 TTS stops at a frame budget, not sentence completion. **100 s is a stress test:**
 outputs contain 70-79 s low-signal tails, not 100 s of continuous speech.
@@ -90,20 +93,21 @@ Each cell shows **processing time**, then reply length. `*` = capped, potentiall
 
 | Input Audio | Transformers | vLLM | SGLang |
 | ---: | ---: | ---: | ---: |
-| 5 s | **1.544 s**<br><sub>13.76 s reply</sub> | **1.418 s**<br><sub>10.72 s reply</sub> | **4.196 s**<br><sub>36.80 s reply*</sub> |
-| 20 s | **3.911 s**<br><sub>36.88 s reply*</sub> | **4.421 s**<br><sub>36.32 s reply*</sub> | **4.276 s**<br><sub>37.12 s reply*</sub> |
-| 100 s | **2.523 s**<br><sub>21.60 s reply</sub> | **4.254 s**<br><sub>32.64 s reply*</sub> | **2.930 s**<br><sub>19.76 s reply</sub> |
+| 5 s | **1.248 s**<br><sub>13.76 s reply</sub> | **1.186 s**<br><sub>10.72 s reply</sub> | **3.332 s**<br><sub>36.80 s reply*</sub> |
+| 20 s | **3.126 s**<br><sub>36.88 s reply*</sub> | **3.631 s**<br><sub>36.32 s reply*</sub> | **3.399 s**<br><sub>37.12 s reply*</sub> |
+| 100 s | **2.059 s**<br><sub>21.60 s reply</sub> | **3.548 s**<br><sub>32.64 s reply*</sub> | **2.404 s**<br><sub>19.76 s reply</sub> |
 
 Inputs repeat/crop a 4.904 s recording. Different replies mean these chat times
 are **not an equal-output speed comparison**. Native tokens differ from Transformers.
 
-[Full three-backend results](results/backends/inference/REPORT.md) |
-[Liquid Audio comparison](results/durations/REPORT.md)
+[Full three-backend results](results/optimization/after/REPORT.md) |
+[Earlier Liquid Audio comparison](results/durations/REPORT.md)
 
 ## Benchmark
 
 ```bash
-python -m benchmarks.compare_backends       # All three, 5 / 20 / 100 s
+python -m benchmarks.compare_backends --output-dir results/optimization/after
+python -m benchmarks.profile
 python -m benchmarks.run --suite durations  # Liquid Audio vs optimized Transformers
 pytest -q
 ```
@@ -111,5 +115,7 @@ pytest -q
 ## Notes
 
 - Single-request, offline inference; no batching, streaming server, or quantization.
+- Greedy Depthformer operations are fused with `torch.compile` before CUDA graph capture.
+  First use includes compilation; set `FAST_LFM_COMPILE_DEPTH=0` to disable it.
 - First-use setup can be slow: the initial 100-second Mimi decode/tuning took 267 seconds.
-- Identical repeated tokens do not establish speech quality or cross-backend equivalence.
+- Token parity does not establish speech quality or bitwise PCM equality.

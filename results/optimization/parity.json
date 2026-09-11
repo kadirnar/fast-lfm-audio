@@ -1,0 +1,206 @@
+{
+  "fast": {
+    "tts_5s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "tts_20s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "tts_100s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_5s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_20s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_100s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "vllm": {
+    "tts_5s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "tts_20s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "tts_100s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_5s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_20s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_100s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  },
+  "sglang": {
+    "tts_5s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "tts_20s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "tts_100s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_5s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_20s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    },
+    "chat_100s": {
+      "method": "tensors",
+      "checks": {
+        "sequences": true,
+        "audio_codes": true,
+        "modalities": true,
+        "counts": true,
+        "repeats_exact": true
+      },
+      "all_exact": true
+    }
+  }
+}

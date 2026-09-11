@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 import torch
 from transformers import Lfm2AudioConfig, Lfm2AudioForConditionalGeneration
@@ -39,8 +41,10 @@ def model():
     return Lfm2AudioForConditionalGeneration(config).to("cuda", torch.bfloat16).eval()
 
 
+@pytest.mark.parametrize("compiled", ["0", "1"])
 @torch.inference_mode()
-def test_depth_graph_preserves_frames_and_owns_outputs(model):
+def test_depth_graph_preserves_frames_and_owns_outputs(model, monkeypatch, compiled):
+    monkeypatch.setenv("FAST_LFM_COMPILE_DEPTH", compiled)
     inputs = [torch.randn(64, device="cuda", dtype=torch.bfloat16) for _ in range(3)]
     expected = [model._sample_audio_frame(hidden, None, 1) for hidden in inputs]
     handle = optimize(model, backbone=False)
@@ -50,6 +54,50 @@ def test_depth_graph_preserves_frames_and_owns_outputs(model):
     assert len({frame.data_ptr() for frame in actual}) == len(actual)
     handle.close()
     optimize(model, backbone=False).close()
+
+
+def test_depth_compilation_can_be_disabled(monkeypatch):
+    from fast_lfm_audio import runtime
+
+    monkeypatch.setenv("FAST_LFM_COMPILE_DEPTH", "0")
+    compile_function, graph = Mock(), Mock()
+    monkeypatch.setattr(runtime.torch, "compile", compile_function)
+    monkeypatch.setattr(runtime, "GraphedCall", graph)
+    function, example = Mock(), torch.zeros(4)
+    assert runtime.depth_graph(function, example) is graph.return_value
+    compile_function.assert_not_called()
+    graph.assert_called_once_with(function, example)
+
+
+def test_depth_compiler_preserves_mean_reductions(monkeypatch):
+    from fast_lfm_audio import runtime
+
+    graph = torch.fx.Graph()
+    value = graph.placeholder("value")
+    graph.output(graph.call_method("mean", (value, -1), {"keepdim": True}))
+    module = torch.fx.GraphModule({}, graph)
+    compiler = Mock(return_value=module)
+    monkeypatch.setattr(torch._inductor, "compile", compiler)
+    inputs = [torch.randn(2, 64)]
+    compiled = runtime._depth_backend(module, inputs)
+    assert torch.equal(compiled(*inputs), inputs[0].mean(-1, keepdim=True))
+    assert any(node.target == torch.ops.fast_lfm_audio.mean_last_dim.default for node in graph.nodes)
+    assert compiler.call_args.kwargs["options"]["emulate_precision_casts"]
+    torch.library.opcheck(runtime._mean_last_dim, tuple(inputs))
+
+
+@torch.inference_mode()
+def test_depth_graph_initializes_rotary_buffers_before_compilation(model, monkeypatch):
+    monkeypatch.setenv("FAST_LFM_COMPILE_DEPTH", "1")
+    operators = [layer.operator for layer in model.model.depthformer.layers]
+    expected = [operator.get_frequencies(torch.device("cuda")).clone() for operator in operators]
+    for operator in operators:
+        operator.frequencies = None
+    handle = optimize(model, backbone=False)
+    model._sample_audio_frame(torch.randn(64, device="cuda", dtype=torch.bfloat16), None, 1)
+    for operator, reference in zip(operators, expected, strict=True):
+        torch.testing.assert_close(operator.frequencies, reference, rtol=0, atol=0)
+    handle.close()
 
 
 @torch.inference_mode()

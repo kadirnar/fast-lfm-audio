@@ -1,0 +1,98 @@
+{
+  "fast": {
+    "tts_5s": {
+      "exact": false,
+      "max_abs_difference": 0.005615234375,
+      "snr_db": 49.44430853687619
+    },
+    "tts_20s": {
+      "exact": false,
+      "max_abs_difference": 0.00677490234375,
+      "snr_db": 48.700933681928404
+    },
+    "tts_100s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_5s": {
+      "exact": false,
+      "max_abs_difference": 0.001220703125,
+      "snr_db": 50.05368843787732
+    },
+    "chat_20s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_100s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    }
+  },
+  "vllm": {
+    "tts_5s": {
+      "exact": false,
+      "max_abs_difference": 0.0040283203125,
+      "snr_db": 49.949765268059075
+    },
+    "tts_20s": {
+      "exact": false,
+      "max_abs_difference": 0.00787353515625,
+      "snr_db": 48.73573242050678
+    },
+    "tts_100s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_5s": {
+      "exact": false,
+      "max_abs_difference": 0.0018310546875,
+      "snr_db": 50.22409224321957
+    },
+    "chat_20s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_100s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    }
+  },
+  "sglang": {
+    "tts_5s": {
+      "exact": false,
+      "max_abs_difference": 0.008331298828125,
+      "snr_db": 48.91025787499309
+    },
+    "tts_20s": {
+      "exact": false,
+      "max_abs_difference": 0.00341796875,
+      "snr_db": 50.711167700723195
+    },
+    "tts_100s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_5s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_20s": {
+      "exact": true,
+      "max_abs_difference": 0.0,
+      "snr_db": null
+    },
+    "chat_100s": {
+      "exact": false,
+      "max_abs_difference": 0.001983642578125,
+      "snr_db": 49.70992190412203
+    }
+  }
+}

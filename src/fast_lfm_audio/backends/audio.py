@@ -12,7 +12,7 @@ import torch
 from transformers import Lfm2AudioForConditionalGeneration
 from transformers.models.lfm2_audio.modeling_lfm2_audio import Lfm2AudioGenerateOutput
 
-from ..runtime import GraphedCall
+from ..runtime import depth_graph
 
 
 class AudioState:
@@ -78,7 +78,7 @@ class AudioState:
                     self.left = self.config.interleaved_n_audio
         else:
             if self.graph is None:
-                self.graph = GraphedCall(lambda h: self.model._sample_audio_frame(h, 0.0, 1), hidden)
+                self.graph = depth_graph(lambda h: self.model._sample_audio_frame(h, 0.0, 1), hidden)
             frame = self.graph(hidden).clone()
             if int(frame[0].item()) == self.config.audio_eos_token_id:
                 frame.fill_(self.config.audio_eos_token_id)

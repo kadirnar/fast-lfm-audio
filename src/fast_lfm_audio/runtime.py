@@ -1,10 +1,11 @@
-"""CUDA graphs around the original Transformers model operations.
+"""CUDA graphs and selective compiler fusion for the Transformers audio model.
 
 One optimized model serves one request at a time. Weights must stay on the same
 CUDA device and dtype after optimization. Prefill uses the original dynamic
 cache; only single-token decoding uses a preallocated static cache.
 """
 
+import os
 import types
 
 import torch
@@ -33,6 +34,42 @@ class GraphedCall:
         self.input.copy_(value)
         self.graph.replay()
         return self.output
+
+
+@torch.library.custom_op("fast_lfm_audio::mean_last_dim", mutates_args=())
+def _mean_last_dim(value: torch.Tensor) -> torch.Tensor:
+    # Keep ATen's reduction order: a reassociated FP32 mean can change greedy audio codes.
+    return value.mean(-1, keepdim=True)
+
+
+@_mean_last_dim.register_fake
+def _mean_last_dim_fake(value):
+    return value.new_empty((*value.shape[:-1], 1))
+
+
+def _depth_backend(graph, inputs):
+    for node in graph.graph.nodes:
+        if node.op == "call_method" and node.target == "mean":
+            if node.args[1:] != (-1,) or node.kwargs != {"keepdim": True}:
+                raise ValueError("Unsupported Depthformer reduction signature.")
+            node.op = "call_function"
+            node.target = torch.ops.fast_lfm_audio.mean_last_dim.default
+            node.args, node.kwargs = (node.args[0],), {}
+    graph.recompile()
+    return torch._inductor.compile(
+        graph,
+        inputs,
+        options={"triton.cudagraphs": False, "emulate_precision_casts": True, "compile_threads": 4},
+    )
+
+
+def depth_graph(function, example):
+    """Fuse greedy depth operations, preserving reductions and BF16 rounding points."""
+    if os.environ.get("FAST_LFM_COMPILE_DEPTH", "1") != "0":
+        # Build lazy complex rotary buffers with the original operations, outside the compiler.
+        function(example)
+        function = torch.compile(function, backend=_depth_backend, fullgraph=True, dynamic=False)
+    return GraphedCall(function, example)
 
 
 class GraphedBackbone:
@@ -188,7 +225,8 @@ class Optimization:
         greedy = temperature is None or temperature <= 0 or top_k == 1
         key = (None, 1) if greedy else (temperature, top_k)
         if key not in self.depth_graphs:
-            self.depth_graphs[key] = GraphedCall(
+            graph = depth_graph if greedy else GraphedCall
+            self.depth_graphs[key] = graph(
                 lambda hidden: self.original_sample(hidden, temperature=key[0], top_k=key[1]), hidden_state
             )
         # Generation retains every frame; graph outputs alias the next replay.
