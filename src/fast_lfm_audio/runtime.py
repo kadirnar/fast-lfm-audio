@@ -5,8 +5,6 @@ CUDA device and dtype after optimization. Prefill uses the original dynamic
 cache; only single-token decoding uses a preallocated static cache.
 """
 
-from __future__ import annotations
-
 import types
 
 import torch
@@ -184,11 +182,7 @@ class Optimization:
         if self.backbone is not None:
             model.model.lfm.forward = self.backbone.forward
         if depth:
-
-            def sample(_model, hidden_state, temperature, top_k):
-                return self.sample(hidden_state, temperature, top_k)
-
-            model._sample_audio_frame = types.MethodType(sample, model)
+            model._sample_audio_frame = self.sample
 
     def sample(self, hidden_state, temperature, top_k):
         greedy = temperature is None or temperature <= 0 or top_k == 1

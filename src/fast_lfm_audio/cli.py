@@ -34,12 +34,12 @@ def main():
         args.text = "Hello, this is a test of fast audio generation."
     torch.set_num_threads(4)
     pipeline = Pipeline(codec=args.codec, backbone=not args.depth_only, max_cache_len=args.max_cache_len)
-    inputs = pipeline.prepare(task=args.task, voice=args.voice, text=args.text, audio=args.audio)
-    text, waveform, output = pipeline.generate(
-        inputs,
-        generation_mode="interleaved" if args.task == "chat" else "sequential",
+    text, waveform, output = pipeline(
+        task=args.task,
+        voice=args.voice,
+        text=args.text,
+        audio=args.audio,
         max_new_tokens=args.max_new_tokens,
-        text_top_k=1,
         audio_top_k=args.audio_top_k,
         audio_temperature=args.audio_temperature,
     )

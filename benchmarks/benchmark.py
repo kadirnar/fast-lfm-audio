@@ -7,7 +7,6 @@ import platform
 import statistics
 import subprocess
 import time
-import types
 from importlib.metadata import version
 from pathlib import Path
 
@@ -20,10 +19,6 @@ from fast_lfm_audio import optimize
 from fast_lfm_audio.pipeline import MODEL_REVISION, MimiDecoder, decodable_codes, model_path, prepare_inputs
 
 from .cases import CASES, ROOT
-
-
-def synchronize():
-    torch.cuda.synchronize()
 
 
 def metadata():
@@ -89,19 +84,16 @@ class Runner:
 
         original = self.model._sample_audio_frame
 
-        def timed_sample(_model, *args, **kwargs):
+        def timed_sample(*args, **kwargs):
             result = original(*args, **kwargs)
             if self.first_audio_ms is None:
-                synchronize()
+                torch.cuda.synchronize()
                 self.first_audio_ms = (time.perf_counter() - self.generation_start) * 1000
             return result
 
-        self.model._sample_audio_frame = types.MethodType(timed_sample, self.model)
+        self.model._sample_audio_frame = timed_sample
 
     def prepare(self, case):
-        wave = None
-        if "audio" in case and self.engine == "liquid":
-            wave, rate = sf.read(ROOT / case["audio"], dtype="float32")
         if self.engine == "liquid":
             from liquid_audio import ChatState
 
@@ -110,7 +102,8 @@ class Runner:
             chat.add_text(case["prompt"])
             chat.end_turn()
             chat.new_turn("user")
-            if wave is not None:
+            if "audio" in case:
+                wave, rate = sf.read(ROOT / case["audio"], dtype="float32")
                 chat.add_audio(torch.from_numpy(wave).unsqueeze(0), rate)
             else:
                 chat.add_text(case["text"])
@@ -146,17 +139,17 @@ class Runner:
         }
 
     def run(self, case, max_tokens):
-        synchronize()
+        torch.cuda.synchronize()
         start = time.perf_counter()
         inputs = self.prepare(case)
-        synchronize()
+        torch.cuda.synchronize()
         prepared = time.perf_counter()
         output = self.generate(inputs, case, max_tokens)
-        synchronize()
+        torch.cuda.synchronize()
         generated = time.perf_counter()
         codes = decodable_codes(output["audio_codes"])
         wave = self.decoder(codes) if codes.shape[-1] else torch.empty((1, 0), device="cuda")
-        synchronize()
+        torch.cuda.synchronize()
         end = time.perf_counter()
         timings = {
             "prepare_ms": (prepared - start) * 1000,
@@ -189,7 +182,7 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     start = time.perf_counter()
     runner = Runner(args.engine, args.max_cache_len)
-    synchronize()
+    torch.cuda.synchronize()
     report = {
         "engine": args.engine,
         "setup_seconds": time.perf_counter() - start,

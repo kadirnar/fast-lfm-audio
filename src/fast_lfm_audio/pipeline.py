@@ -79,7 +79,7 @@ class MimiDecoder:
 
 
 class Pipeline:
-    """Load once, then prepare and generate one request at a time."""
+    """Load once, then call with text or audio for one request at a time."""
 
     def __init__(self, model_id=MODEL_ID, *, codec="fast-mimi", backbone=True, max_cache_len=2048):
         if codec not in ("fast-mimi", "lfm"):
@@ -91,6 +91,19 @@ class Pipeline:
         ).eval()
         self.optimization = optimize(self.model, backbone=backbone, max_cache_len=max_cache_len)
         self.decoder = MimiDecoder() if codec == "fast-mimi" else self.processor.decode_audio
+
+    def __call__(self, *, text=None, audio=None, task="tts", voice="UK female", **kwargs):
+        """Return (text, 24 kHz mono waveform, raw output); use greedy sampling by default."""
+        inputs = self.prepare(text=text, audio=audio, task=task, voice=voice)
+        options = {
+            "generation_mode": "interleaved" if task == "chat" else "sequential",
+            "max_new_tokens": 512,
+            "text_top_k": 1,
+            "audio_top_k": 1,
+            "audio_temperature": 0.0,
+        }
+        options.update(kwargs)
+        return self.generate(inputs, **options)
 
     def prepare(self, *, text=None, audio=None, task="tts", voice="UK female"):
         """Prepare TTS, spoken chat, or transcription inputs."""
