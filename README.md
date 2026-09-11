@@ -52,23 +52,31 @@ Reuse the same instance. Audio is mono, 24 kHz; requests run one at a time.
 
 Compared with [Liquid Audio](https://github.com/Liquid4All/liquid-audio) on RTX 5070 Ti
 (PyTorch 2.13.0, CUDA 13.0). Median of five warm requests, batch one, greedy sampling.
-Includes input preparation, generation, and full audio decoding. Excludes model
-loading, first-use setup, and recording/playback; this is not time to first audio.
 
-| Task | Input audio (s) | Output audio (s) | Liquid Audio E2E (s) | Fast LFM Audio E2E (s) | Speedup |
-| --- | --- | --- | --- | --- | --- |
-| TTS | - | 5.04 | 2.219 | 0.513 | 4.33x |
-| TTS | - | 20.00 | 8.664 | 2.011 | 4.31x |
-| TTS (stress test) | - | 100.00 | 44.291 | 10.039 | 4.41x |
-| Voice chat | 5 | 13.76 | 6.234 | 1.546 | 4.03x |
-| Voice chat | 20 | 36.88 | 16.230 | 3.918 | 4.14x |
-| Voice chat | 100 | 21.60 | 9.885 | 2.526 | 3.91x |
+**Processing time:** input preparation + generation + full audio decoding.
+Lower is better. Model loading, first-use setup, and recording/playback are excluded.
 
-TTS outputs stop at a frame budget, not sentence completion. Chat inputs repeat
-and crop a 4.904-second recording; the 20-second case hits its response limit.
+### Text to Speech
 
-**100-second TTS is a stress test:** both engines have a roughly 70-second
-low-signal tail, not 100 seconds of continuous speech.
+| Generated audio | Liquid Audio | Fast LFM Audio | Speedup |
+| ---: | ---: | ---: | ---: |
+| 5.04 s | 2.219 s | **0.513 s** | 4.33x |
+| 20.00 s | 8.664 s | **2.011 s** | 4.31x |
+| 100.00 s | 44.291 s | **10.039 s** | 4.41x |
+
+TTS outputs stop at a frame budget, not sentence completion. **100 s is a stress
+test:** both engines have a roughly 70 s low-signal tail, not 100 s of continuous speech.
+
+### Voice Chat
+
+| Input audio | Reply audio | Liquid Audio | Fast LFM Audio | Speedup |
+| ---: | ---: | ---: | ---: | ---: |
+| 5 s | 13.76 s | 6.234 s | **1.546 s** | 4.03x |
+| 20 s | 36.88 s | 16.230 s | **3.918 s** | 4.14x |
+| 100 s | 21.60 s | 9.885 s | **2.526 s** | 3.91x |
+
+Inputs repeat/crop a 4.904 s recording. Reply lengths vary; the 20 s input hits
+the response limit, so its reply is partial.
 
 Full results: [standard](results/REPORT.md) and [5/20/100 seconds](results/durations/REPORT.md).
 
