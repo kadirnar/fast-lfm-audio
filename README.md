@@ -1,6 +1,6 @@
 # Fast LFM Audio
 
-Fast LFM2.5 Audio 1.5B inference for TTS, voice chat, and ASR.
+LFM2.5 Audio 1.5B inference for TTS, voice chat, and ASR.
 Uses [Transformers PR #48249](https://github.com/huggingface/transformers/pull/48249),
 CUDA graphs, and [fast-mimi](https://github.com/kadirnar/fast-mimi).
 
@@ -33,61 +33,83 @@ fast-lfm-audio --task asr --audio question.wav
 Chat also accepts `--text`. TTS voices: `UK female` (default), `UK male`,
 `US female`, `US male`; select with `--voice`. More options: `fast-lfm-audio --help`.
 
+### vLLM and SGLang
+
+```bash
+bash scripts/backend.sh vllm --setup
+bash scripts/backend.sh sglang --setup
+
+bash scripts/backend.sh vllm --text 'Hello from LFM.' --output speech.wav
+bash scripts/backend.sh sglang --task chat --audio question.wav --output answer.wav
+```
+
+Official vLLM 0.29.0 and SGLang 0.5.19, in separate environments, with **experimental
+local audio adapters**. The LFM2 backbone runs natively; the encoder/depthformer
+use the Transformers PR. Batch one, greedy sampling, maximum 4096-token context.
+SGLang overrides its Transformers/tokenizers pins; [compatibility details](results/backends/inference/REPORT.md#versions).
+
 ## Python
 
 ```python
 import soundfile as sf
 from fast_lfm_audio import Pipeline
 
-model = Pipeline()
-text, audio, _ = model(text="Hello from LFM.")
-sf.write("speech.wav", audio[0].cpu().numpy(), 24000)
-
-text, audio, _ = model(task="chat", audio="question.wav")
+if __name__ == "__main__":
+    with Pipeline(backend="transformers") as model:
+        text, audio, _ = model(text="Hello from LFM.")
+        sf.write("speech.wav", audio[0].cpu().numpy(), 24000)
+        text, audio, _ = model(task="chat", audio="question.wav")
 ```
 
-Reuse the same instance. Audio is mono, 24 kHz; requests run one at a time.
+Reuse the instance. Audio is mono, 24 kHz. Native backends use the same API
+with `backend="vllm"` or `"sglang"` in their matching environment. Keep the
+`__main__` guard for their worker processes.
 
 ## End-to-End Latency
 
-Compared with [Liquid Audio](https://github.com/Liquid4All/liquid-audio) on RTX 5070 Ti
-(PyTorch 2.13.0, CUDA 13.0). Median of five warm requests, batch one, greedy sampling.
+RTX 5070 Ti, PyTorch 2.13.0, BF16, batch one. Median of five warm requests.
+All three use CUDA graphs and fast-mimi. **Transformers is the optimized version in this repo.**
 
 **Processing time:** input preparation + generation + full audio decoding.
-Lower is better. Model loading, first-use setup, and recording/playback are excluded.
+Lower is better. Model loading, first-use setup, file writing, and recording/playback are excluded.
 
 ### Text to Speech
 
-| Generated audio | Liquid Audio | Fast LFM Audio | Speedup |
+| Generated Audio | Transformers | vLLM | SGLang |
 | ---: | ---: | ---: | ---: |
-| 5.04 s | 2.219 s | **0.513 s** | 4.33x |
-| 20.00 s | 8.664 s | **2.011 s** | 4.31x |
-| 100.00 s | 44.291 s | **10.039 s** | 4.41x |
+| 5.04 s | **0.513 s** | 0.578 s | 0.556 s |
+| 20.00 s | **2.010 s** | 2.258 s | 2.133 s |
+| 100.00 s* | **10.029 s** | 11.364 s | 10.851 s |
 
-TTS outputs stop at a frame budget, not sentence completion. **100 s is a stress
-test:** both engines have a roughly 70 s low-signal tail, not 100 s of continuous speech.
+TTS stops at a frame budget, not sentence completion. **100 s is a stress test:**
+outputs contain 70-79 s low-signal tails, not 100 s of continuous speech.
 
 ### Voice Chat
 
-| Input audio | Reply audio | Liquid Audio | Fast LFM Audio | Speedup |
-| ---: | ---: | ---: | ---: | ---: |
-| 5 s | 13.76 s | 6.234 s | **1.546 s** | 4.03x |
-| 20 s | 36.88 s | 16.230 s | **3.918 s** | 4.14x |
-| 100 s | 21.60 s | 9.885 s | **2.526 s** | 3.91x |
+Each cell shows **processing time**, then reply length. `*` = capped, potentially incomplete reply.
 
-Inputs repeat/crop a 4.904 s recording. Reply lengths vary; the 20 s input hits
-the response limit, so its reply is partial.
+| Input Audio | Transformers | vLLM | SGLang |
+| ---: | ---: | ---: | ---: |
+| 5 s | **1.544 s**<br><sub>13.76 s reply</sub> | **1.418 s**<br><sub>10.72 s reply</sub> | **4.196 s**<br><sub>36.80 s reply*</sub> |
+| 20 s | **3.911 s**<br><sub>36.88 s reply*</sub> | **4.421 s**<br><sub>36.32 s reply*</sub> | **4.276 s**<br><sub>37.12 s reply*</sub> |
+| 100 s | **2.523 s**<br><sub>21.60 s reply</sub> | **4.254 s**<br><sub>32.64 s reply*</sub> | **2.930 s**<br><sub>19.76 s reply</sub> |
 
-Full results: [standard](results/REPORT.md) and [5/20/100 seconds](results/durations/REPORT.md).
+Inputs repeat/crop a 4.904 s recording. Different replies mean these chat times
+are **not an equal-output speed comparison**. Native tokens differ from Transformers.
+
+[Full three-backend results](results/backends/inference/REPORT.md) |
+[Liquid Audio comparison](results/durations/REPORT.md)
+
+## Benchmark
 
 ```bash
-python -m benchmarks.run                    # Standard cases
-python -m benchmarks.run --suite durations  # 5 / 20 / 100 seconds
+python -m benchmarks.compare_backends       # All three, 5 / 20 / 100 s
+python -m benchmarks.run --suite durations  # Liquid Audio vs optimized Transformers
 pytest -q
 ```
 
 ## Notes
 
-- BF16 model, no quantization. Full output is decoded offline, not streamed.
+- Single-request, offline inference; no batching, streaming server, or quantization.
 - First-use setup can be slow: the initial 100-second Mimi decode/tuning took 267 seconds.
-- Matching tokens do not mean matching waveforms or speech quality; the decoders differ.
+- Identical repeated tokens do not establish speech quality or cross-backend equivalence.

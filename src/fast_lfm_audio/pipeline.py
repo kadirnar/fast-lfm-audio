@@ -81,16 +81,36 @@ class MimiDecoder:
 class Pipeline:
     """Load once, then call with text or audio for one request at a time."""
 
-    def __init__(self, model_id=MODEL_ID, *, codec="fast-mimi", backbone=True, max_cache_len=2048):
+    def __init__(
+        self,
+        model_id=MODEL_ID,
+        *,
+        backend="transformers",
+        codec="fast-mimi",
+        backbone=True,
+        max_cache_len=2048,
+    ):
+        if backend not in ("transformers", "vllm", "sglang"):
+            raise ValueError("backend must be 'transformers', 'vllm', or 'sglang'.")
         if codec not in ("fast-mimi", "lfm"):
             raise ValueError("codec must be 'fast-mimi' or 'lfm'.")
         path = model_path(model_id)
         self.processor = Lfm2AudioProcessor.from_pretrained(path)
-        self.model = Lfm2AudioForConditionalGeneration.from_pretrained(
-            path, dtype=torch.bfloat16, device_map="cuda"
-        ).eval()
-        self.optimization = optimize(self.model, backbone=backbone, max_cache_len=max_cache_len)
-        self.decoder = MimiDecoder() if codec == "fast-mimi" else self.processor.decode_audio
+        self.backend = backend
+        if backend == "transformers":
+            self.model = Lfm2AudioForConditionalGeneration.from_pretrained(
+                path, dtype=torch.bfloat16, device_map="cuda"
+            ).eval()
+            self.optimization = optimize(self.model, backbone=backbone, max_cache_len=max_cache_len)
+        else:
+            from .backends.model import NativeGenerator
+
+            self.model = NativeGenerator(path, backend, max_cache_len, graphs=backbone)
+        try:
+            self.decoder = MimiDecoder() if codec == "fast-mimi" else self.processor.decode_audio
+        except BaseException:
+            self.close()
+            raise
 
     def __call__(self, *, text=None, audio=None, task="tts", voice="UK female", **kwargs):
         """Return (text, 24 kHz mono waveform, raw output); use greedy sampling by default."""
@@ -128,3 +148,13 @@ class Pipeline:
         waveform = self.decoder(codes) if codes.shape[-1] else torch.empty((1, 0), device="cuda")
         text = self.processor.tokenizer.decode(output.sequences[0], skip_special_tokens=True)
         return text, waveform, output
+
+    def close(self):
+        if self.backend != "transformers":
+            self.model.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()

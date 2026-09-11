@@ -10,6 +10,7 @@ from .pipeline import VOICES, Pipeline
 def main():
     parser = argparse.ArgumentParser(description="LFM2.5 Audio inference with CUDA graphs and fast-mimi")
     parser.add_argument("--task", choices=("tts", "chat", "asr"), default="tts")
+    parser.add_argument("--backend", choices=("transformers", "vllm", "sglang"), default="transformers")
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--text")
     source.add_argument("--audio", type=Path)
@@ -33,16 +34,18 @@ def main():
     if args.audio is None and args.text is None:
         args.text = "Hello, this is a test of fast audio generation."
     torch.set_num_threads(4)
-    pipeline = Pipeline(codec=args.codec, backbone=not args.depth_only, max_cache_len=args.max_cache_len)
-    text, waveform, output = pipeline(
-        task=args.task,
-        voice=args.voice,
-        text=args.text,
-        audio=args.audio,
-        max_new_tokens=args.max_new_tokens,
-        audio_top_k=args.audio_top_k,
-        audio_temperature=args.audio_temperature,
-    )
+    with Pipeline(
+        backend=args.backend, codec=args.codec, backbone=not args.depth_only, max_cache_len=args.max_cache_len
+    ) as pipeline:
+        text, waveform, output = pipeline(
+            task=args.task,
+            voice=args.voice,
+            text=args.text,
+            audio=args.audio,
+            max_new_tokens=args.max_new_tokens,
+            audio_top_k=args.audio_top_k,
+            audio_temperature=args.audio_temperature,
+        )
     if text:
         print(text)
     if waveform.numel():

@@ -1,13 +1,14 @@
 """Run each implementation in its own process, with identical requests and greedy sampling."""
 
 import argparse
+import atexit
 import hashlib
 import json
 import platform
 import statistics
 import subprocess
 import time
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import numpy as np
@@ -22,15 +23,19 @@ from .cases import CASES, ROOT
 
 
 def metadata():
+    packages = {}
+    for name in ("transformers", "fast-mimi", "liquid-audio", "torchaudio", "vllm", "sglang"):
+        try:
+            packages[name] = version(name)
+        except PackageNotFoundError:
+            pass
     return {
         "gpu": torch.cuda.get_device_name(),
         "gpu_total_bytes": torch.cuda.get_device_properties(0).total_memory,
         "python": platform.python_version(),
         "torch": torch.__version__,
         "cuda": torch.version.cuda,
-        "packages": {
-            name: version(name) for name in ("transformers", "fast-mimi", "liquid-audio", "torchaudio")
-        },
+        "packages": packages,
         "commits": {
             name: subprocess.check_output(
                 ["git", "-C", str(ROOT / "vendor" / name), "rev-parse", "HEAD"], text=True
@@ -54,6 +59,14 @@ class Runner:
         self.engine = engine
         path = model_path()
         self.first_audio_ms = None
+        if engine in ("vllm", "sglang"):
+            from fast_lfm_audio.backends.model import NativeGenerator
+
+            self.processor = Lfm2AudioProcessor.from_pretrained(path)
+            self.model = NativeGenerator(path, engine, max_cache_len)
+            atexit.register(self.model.close)
+            self.decoder = MimiDecoder()
+            return
         if engine == "liquid":
             from liquid_audio import LFM2AudioModel, LFM2AudioProcessor
 
@@ -165,7 +178,9 @@ class Runner:
 @torch.inference_mode()
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--engine", choices=("liquid", "hf", "depth", "fast"), required=True)
+    parser.add_argument(
+        "--engine", choices=("liquid", "hf", "depth", "fast", "vllm", "sglang"), required=True
+    )
     parser.add_argument("--cases", nargs="+")
     parser.add_argument("--cases-file", type=Path)
     parser.add_argument("--repeats", type=int, default=5)
@@ -211,6 +226,7 @@ def main():
                 raise RuntimeError(f"Non-finite waveform: {name}")
             if (
                 "target_frames" in case
+                and args.engine not in ("vllm", "sglang")
                 and decodable_codes(output["audio_codes"]).shape[-1] != case["target_frames"]
             ):
                 raise RuntimeError(f"TTS stopped before the requested frame budget: {name}")
@@ -241,6 +257,11 @@ def main():
             "p95_total_ms": float(np.percentile([sample["total_ms"] for sample in samples], 95)),
             "events": output["modalities"].numel(),
             "audio_frames": output["audio_codes"].shape[-1],
+            "target_frames_reached": (
+                decodable_codes(output["audio_codes"]).shape[-1] == case["target_frames"]
+                if "target_frames" in case
+                else None
+            ),
             "limit_reached": output["modalities"].numel() == max_tokens,
             "repeat_exact": repeated_exact,
             "hashes": {key: digest(tensor) for key, tensor in cpu_output.items()},
@@ -251,6 +272,8 @@ def main():
         torch.save(artifacts, args.output_dir / f"{args.engine}_tokens.pt")
         sf.write(args.output_dir / f"{args.engine}_{name}.wav", wave[0].float().cpu().numpy(), 24000)
         (args.output_dir / f"{args.engine}.json").write_text(json.dumps(report, indent=2) + "\n")
+    if args.engine in ("vllm", "sglang"):
+        runner.model.close()
 
 
 if __name__ == "__main__":

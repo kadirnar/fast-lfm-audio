@@ -8,6 +8,8 @@ import soundfile as sf
 import torch
 
 from benchmarks.cases import ROOT, make_duration_cases
+from benchmarks.compare_backends import BACKENDS
+from benchmarks.compare_backends import write_report as write_backend_report
 from benchmarks.report import compare_outputs, waveform_statistics, write_report
 
 
@@ -67,3 +69,47 @@ def test_report_from_published_json_and_mismatched_requests(tmp_path):
     (tmp_path / "fast.json").write_text(json.dumps(data))
     with pytest.raises(ValueError, match="Different requests"):
         write_report(tmp_path)
+
+
+@pytest.fixture
+def backend_reports(tmp_path):
+    source = ROOT / "results/backends/inference"
+    for engine in BACKENDS:
+        data = json.loads((source / f"{engine}.json").read_text())
+        data["cases"] = {"chat_5s": data["cases"]["chat_5s"]}
+        (tmp_path / f"{engine}.json").write_text(json.dumps(data))
+    (tmp_path / "waveforms.json").write_text((source / "waveforms.json").read_text())
+    return tmp_path
+
+
+def test_backend_report_without_local_tensors_or_wavs(backend_reports):
+    waveforms = (backend_reports / "waveforms.json").read_text()
+    write_backend_report(backend_reports)
+    report = (backend_reports / "REPORT.md").read_text()
+    assert "**1.544 s**" in report and "13.76 s audio" in report
+    assert "36.80 s audio (capped)" in report
+    parity = json.loads((backend_reports / "parity.json").read_text())
+    assert parity["chat_5s"]["vllm"]["method"] == "recorded_sha256"
+    assert not parity["chat_5s"]["vllm"]["all_exact"]
+    assert json.loads((backend_reports / "waveforms.json").read_text()) == json.loads(waveforms)
+
+
+@pytest.mark.parametrize(
+    "mismatch", ["requests", "repeat counts", "case sets", "cache limits", "benchmark environments"]
+)
+def test_backend_report_rejects_incomparable_runs(backend_reports, mismatch):
+    path = backend_reports / "sglang.json"
+    data = json.loads(path.read_text())
+    if mismatch == "requests":
+        data["cases"]["chat_5s"]["request"]["input_seconds"] = 99
+    elif mismatch == "repeat counts":
+        data["cases"]["chat_5s"]["samples"].pop()
+    elif mismatch == "case sets":
+        data["cases"].clear()
+    elif mismatch == "cache limits":
+        data["max_cache_len"] = 2048
+    else:
+        data["environment"]["cuda"] = "different"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match=f"Different {mismatch}"):
+        write_backend_report(backend_reports)
