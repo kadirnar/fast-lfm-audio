@@ -1,6 +1,7 @@
 """vLLM's native LFM2 kernels/cache, with audio sampling outside its CUDA graph."""
 
 import os
+from uuid import uuid4
 
 from vllm import LLM, SamplingParams
 from vllm.model_executor.models.lfm2 import Lfm2ForCausalLM
@@ -35,14 +36,15 @@ class AudioWorker:
     def reset_lfm_audio(self, mode):
         self.model_runner.model.audio_state.reset(mode)
 
-    def get_lfm_audio(self):
-        return self.model_runner.model.audio_state.events
+    def get_lfm_audio(self, offset=0):
+        return self.model_runner.model.audio_state.events[offset:]
 
 
 class VllmEngine:
     def __init__(self, path, max_cache_len, graphs):
         os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
         os.environ.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
+        os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
         register_vllm()
         self.engine = LLM(
             model=str(path),
@@ -65,14 +67,29 @@ class VllmEngine:
             worker_extension_cls="fast_lfm_audio.backends.vllm.AudioWorker",
         )
 
-    def generate(self, embeddings, mode, max_new_tokens):
+    def generate(self, embeddings, mode, max_new_tokens, *, on_event=None):
         self.engine.collective_rpc("reset_lfm_audio", kwargs={"mode": mode})
-        self.engine.generate(
-            {"prompt_embeds": embeddings.cpu()},
-            SamplingParams(temperature=0, max_tokens=max_new_tokens, detokenize=False),
-            use_tqdm=False,
-        )
-        return self.engine.collective_rpc("get_lfm_audio")[0]
+        prompt = {"prompt_embeds": embeddings.cpu()}
+        params = SamplingParams(temperature=0, max_tokens=max_new_tokens, detokenize=False)
+        if on_event is None:
+            self.engine.generate(prompt, params, use_tqdm=False)
+            return self.engine.collective_rpc("get_lfm_audio")[0]
+        engine = self.engine.llm_engine
+        request_id = engine.add_request(str(uuid4()), prompt, params)
+        events = []
+        try:
+            while engine.has_unfinished_requests():
+                engine.step()
+                pending = self.engine.collective_rpc("get_lfm_audio", kwargs={"offset": len(events)})[0]
+                events.extend(pending)
+                for event in pending:
+                    on_event(event)
+        except BaseException:
+            engine.abort_request([request_id], internal=True)
+            # Complete the worker round trip before the next request resets audio state.
+            self.engine.collective_rpc("get_lfm_audio", kwargs={"offset": len(events)})
+            raise
+        return events
 
     def close(self):
         self.engine.llm_engine.engine_core.shutdown()

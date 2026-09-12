@@ -15,6 +15,7 @@ from filelock import FileLock
 from safetensors.torch import save_file
 from transformers import Lfm2AudioForConditionalGeneration
 
+from ..runtime import GraphedAudioEncoder
 from .audio import output_tensors
 
 VERSIONS = {"vllm": "0.29.0", "sglang": "0.5.19"}
@@ -83,6 +84,7 @@ class NativeGenerator:
         self.frontend = Lfm2AudioForConditionalGeneration.from_pretrained(source, dtype=torch.bfloat16).eval()
         self.frontend.model.lfm.layers = torch.nn.ModuleList()
         self.frontend = self.frontend.cuda()
+        self.encoder = GraphedAudioEncoder(self.frontend.model) if graphs else None
         self.config = self.frontend.config
         self.max_cache_len = max_cache_len
         self.lock = threading.Lock()
@@ -114,9 +116,12 @@ class NativeGenerator:
         text_top_k=1,
         audio_temperature=None,
         audio_top_k=1,
+        on_audio_frame=None,
     ):
         if self.closed:
             raise RuntimeError("The native engine is closed.")
+        if on_audio_frame is not None and not callable(on_audio_frame):
+            raise TypeError("on_audio_frame must be callable.")
         if (
             generation_mode not in ("sequential", "interleaved")
             or not isinstance(max_new_tokens, int)
@@ -148,7 +153,17 @@ class NativeGenerator:
                 raise ValueError("Native audio adapters require batch size one.")
             if embeddings.shape[1] + max_new_tokens > self.max_cache_len:
                 raise ValueError("Prompt plus token budget exceeds max_cache_len.")
-            return output_tensors(self.engine.generate(embeddings[0], generation_mode, max_new_tokens))
+            options = {}
+            if on_audio_frame is not None:
+
+                def on_event(event):
+                    if event is not None and event[0] == 3:
+                        on_audio_frame(torch.tensor(event[1:], dtype=torch.long, device=embeddings.device))
+
+                options["on_event"] = on_event
+            return output_tensors(
+                self.engine.generate(embeddings[0], generation_mode, max_new_tokens, **options)
+            )
         finally:
             self.lock.release()
 
@@ -156,5 +171,7 @@ class NativeGenerator:
         with self.lock:
             if not self.closed:
                 self.engine.close()
+                if getattr(self, "encoder", None) is not None:
+                    self.encoder.close()
                 self.closed = True
                 atexit.unregister(self.close)

@@ -6,16 +6,22 @@ cache. The FP16/BF16 path uses a preallocated static decode cache; strict FP32
 retains the original dynamic cache and captures its exact shapes.
 """
 
+import copy
 import gc
 import os
 import types
 import weakref
+from collections import OrderedDict
 
 import torch
 from torch.nn.attention.varlen import varlen_attn
-from transformers import StaticCache
+from transformers import DynamicCache, StaticCache
 from transformers.modeling_outputs import BaseModelOutputWithPast
-from transformers.models.lfm2.modeling_lfm2 import apply_rotary_pos_emb
+from transformers.models.lfm2.modeling_lfm2 import (
+    apply_rotary_pos_emb,
+    create_causal_mask,
+    create_recurrent_attention_mask,
+)
 
 
 class GraphedCall:
@@ -73,6 +79,124 @@ def _release_graph(graph, cuda_runtime, stream, device):
             raise RuntimeError(f"CUDA stream destruction failed: {status}")
 
 
+class GraphedAudioEncoder:
+    """Replay the original encoder at each input shape; retain two recent shapes."""
+
+    def __init__(self, model):
+        self.model = model
+        self.original = model.get_audio_features
+        self.graphs = OrderedDict()
+        model.get_audio_features = self.forward
+
+    def forward(self, input_features, input_features_attention_mask=None):
+        mask = input_features_attention_mask
+        if (
+            self.model.training
+            or self.model.conformer.training
+            or torch.is_grad_enabled()
+            or torch.is_autocast_enabled("cuda")
+            or not input_features.is_cuda
+            or (mask is not None and not mask.is_cuda)
+            or torch.cuda.is_current_stream_capturing()
+        ):
+            return self.original(input_features, mask)
+        key = tuple(
+            None if value is None else (value.shape, value.stride(), value.dtype, value.device)
+            for value in (input_features, mask)
+        )
+        if key not in self.graphs:
+            if len(self.graphs) >= 2:
+                _, (graph, _) = self.graphs.popitem(last=False)
+                graph.close()
+            static_mask = None if mask is None else mask.clone()
+            graph = GraphedCall(lambda value: self.original(value, static_mask), input_features)
+            self.graphs[key] = (graph, static_mask)
+        self.graphs.move_to_end(key)
+        graph, static_mask = self.graphs[key]
+        if mask is not None:
+            static_mask.copy_(mask)
+        audio, audio_mask = graph(input_features)
+        return audio.clone(), audio_mask.clone()
+
+    def close(self):
+        self.model.get_audio_features = self.original
+        for graph, _ in self.graphs.values():
+            graph.close()
+        self.graphs.clear()
+
+
+class GraphedPrefill:
+    """Capture the original prompt computation with a fresh dynamic cache."""
+
+    def __init__(self, model, max_cache_len):
+        self.model = model
+        self.original = model.forward
+        self.max_cache_len = max_cache_len
+        self.graphs = OrderedDict()
+
+    def __call__(self, *args, **kwargs):
+        value = kwargs.get("inputs_embeds")
+        if (
+            args
+            or value is None
+            or value.ndim != 3
+            or value.shape[0] != 1
+            or not 1 <= value.shape[1] <= self.max_cache_len
+            or not value.is_cuda
+            or torch.is_grad_enabled()
+            or torch.is_autocast_enabled("cuda")
+            or (
+                value.dtype == torch.float32
+                and (torch.backends.cuda.matmul.allow_tf32 or torch.backends.cudnn.allow_tf32)
+            )
+            or self.model.training
+            or getattr(self.model.config, "output_hidden_states", False)
+            or getattr(self.model.config, "output_attentions", False)
+            or not getattr(self.model.config, "return_dict", True)
+            or kwargs.get("past_key_values") is not None
+            or kwargs.get("attention_mask") is not None
+            or kwargs.get("use_cache") is not True
+            or kwargs.get("return_dict", True) is not True
+            or set(kwargs)
+            - {"inputs_embeds", "past_key_values", "attention_mask", "use_cache", "return_dict"}
+            or torch.cuda.is_current_stream_capturing()
+        ):
+            return self.original(*args, **kwargs)
+        key = (value.shape, value.stride(), value.dtype, value.device)
+        if key not in self.graphs:
+            if len(self.graphs) >= 2:
+                self.graphs.popitem(last=False)[1].close()
+            options = {
+                "config": self.model.config,
+                "inputs_embeds": value,
+                "attention_mask": None,
+                "past_key_values": DynamicCache(config=self.model.config),
+                "position_ids": torch.arange(value.shape[1], device=value.device).unsqueeze(0),
+            }
+            # Freeze the eager mask choice before CUDA capture changes is_tracing().
+            masks = {
+                "full_attention": create_causal_mask(**options),
+                "conv": create_recurrent_attention_mask(**options),
+            }
+            self.graphs[key] = GraphedCall(
+                lambda hidden: self.original(
+                    inputs_embeds=hidden, attention_mask=masks, use_cache=True, return_dict=True
+                ),
+                value,
+            )
+        self.graphs.move_to_end(key)
+        output = self.graphs[key](value)
+        return BaseModelOutputWithPast(
+            last_hidden_state=output.last_hidden_state.clone(),
+            past_key_values=copy.deepcopy(output.past_key_values),
+        )
+
+    def clear(self):
+        for graph in self.graphs.values():
+            graph.close()
+        self.graphs.clear()
+
+
 @torch.library.custom_op("fast_lfm_audio::mean_last_dim", mutates_args=())
 def _mean_last_dim(value: torch.Tensor) -> torch.Tensor:
     # Keep ATen's reduction order: a reassociated FP32 mean can change greedy audio codes.
@@ -113,6 +237,7 @@ class GraphedBackbone:
     def __init__(self, backbone, max_cache_len):
         self.backbone = backbone
         self.original = backbone.forward
+        self.prefill = GraphedPrefill(backbone, max_cache_len)
         self.max_cache_len = max_cache_len
         self.cache = None
         self.calls = {}
@@ -225,7 +350,7 @@ class GraphedBackbone:
         embedding = kwargs.get("inputs_embeds")
         past = kwargs.get("past_key_values")
         if past is None:
-            return self.original(*args, **kwargs)
+            return self.prefill(*args, **kwargs)
         if args or embedding is None or embedding.shape[:2] != (1, 1):
             if past is self.cache:
                 raise ValueError("Graph cache supports batch-one, single-token decoding only.")
@@ -252,6 +377,8 @@ class Optimization:
         self.original_sample = model._sample_audio_frame
         self.original_forward = model.model.lfm.forward
         self.depth_graphs = {}
+        self.encoder = GraphedAudioEncoder(model.model)
+        self.closed = False
         self.backbone = GraphedBackbone(model.model.lfm, max_cache_len) if backbone else None
         if self.backbone is not None:
             model.model.lfm.forward = self.backbone.forward
@@ -270,12 +397,23 @@ class Optimization:
         return self.depth_graphs[key](hidden_state).clone()
 
     def close(self):
+        if self.closed:
+            return
         self.model._sample_audio_frame = self.original_sample
         self.model.model.lfm.forward = self.original_forward
+        self.encoder.close()
+        for graph in self.depth_graphs.values():
+            graph.close()
+        self.depth_graphs.clear()
         if self.backbone is not None:
+            self.backbone.prefill.clear()
             for module, original in self.backbone.attention_originals:
                 module.forward = original
+            for graph in self.backbone.calls.values():
+                graph.close()
+            self.backbone.calls.clear()
         del self.model._fast_lfm_optimization
+        self.closed = True
 
 
 def optimize(model, *, backbone=True, depth=True, max_cache_len=2048, strict=None):

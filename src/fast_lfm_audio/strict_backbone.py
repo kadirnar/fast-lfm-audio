@@ -76,8 +76,11 @@ class _Step:
 
 class ExactBackbone:
     def __init__(self, model, *, refresh, max_cache_len=2048, capacity=64):
+        from .runtime import GraphedPrefill
+
         self.model = model
         self.original = model.forward
+        self.prefill = GraphedPrefill(model, max_cache_len)
         self.instance_forward = model.__dict__.get("forward")
         self.refresh = refresh
         self.max_cache_len = max_cache_len
@@ -129,6 +132,9 @@ class ExactBackbone:
         return True
 
     def forward(self, *args, **kwargs):
+        if kwargs.get("past_key_values") is None:
+            self.refresh()
+            return self.prefill(*args, **kwargs)
         if not self._can_graph(args, kwargs):
             return self.original(*args, **kwargs)
         self.refresh()
@@ -165,6 +171,7 @@ class ExactBackbone:
         return self.graphs[key](value, cache)
 
     def clear(self):
+        self.prefill.clear()
         for step in self.graphs.values():
             step.close()
         self.graphs.clear()

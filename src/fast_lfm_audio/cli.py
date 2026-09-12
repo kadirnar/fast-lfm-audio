@@ -41,7 +41,7 @@ def main():
         parser.error("--text must not be empty")
     if args.audio is None and args.text is None:
         args.text = "Hello, this is a test of fast audio generation."
-    torch.set_num_threads(4)
+    torch.set_num_threads(4 if args.backend == "transformers" else 1)
     with Pipeline(
         backend=args.backend,
         codec=args.codec,

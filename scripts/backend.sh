@@ -43,7 +43,7 @@ if [[ ! -x "$environment/bin/python" ]]; then
 fi
 export PATH="$PWD/$environment/bin:$PATH"
 export CUDA_HOME="${CUDA_HOME:-$PWD/vendor/envs/cuda/lib/python3.12/site-packages/nvidia/cu13}"
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-1}"
 export FAST_LFM_NATIVE_BACKEND="$backend"
 export VLLM_USE_FLASHINFER_SAMPLER=0
 export VLLM_WORKER_MULTIPROC_METHOD=spawn

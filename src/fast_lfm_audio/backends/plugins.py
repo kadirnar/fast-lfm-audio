@@ -17,8 +17,16 @@ def register_sglang():
     from sglang.srt.plugins.hook_registry import HookRegistry, HookType
 
     class AudioScheduler(Scheduler):
-        def reset_lfm_audio(self, mode):
-            self.tp_worker.model_runner.model.audio_state.reset(mode)
+        def reset_lfm_audio(self, mode, embedding_path, frames, width):
+            import torch
+
+            model = self.tp_worker.model_runner.model
+            model.audio_state.reset(mode)
+            model.prompt_embeddings = (
+                torch.from_file(embedding_path, shared=True, size=frames * width, dtype=torch.bfloat16)
+                .reshape(frames, width)
+                .cuda()
+            )
 
     def sample_audio(original, runner, logits_output, forward_batch):
         state = getattr(runner.model, "audio_state", None)

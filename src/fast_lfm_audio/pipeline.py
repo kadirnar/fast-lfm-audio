@@ -116,7 +116,7 @@ class MimiDecoder:
         if not self.strict or not codes.shape[-1]:
             return self(codes)
         frames = codes.shape[-1]
-        bucket = max(16, 1 << (frames - 1).bit_length())
+        bucket = max(4, 1 << (frames - 1).bit_length())
         padded = torch.nn.functional.pad(codes, (0, bucket - frames))
         with fp32_precision():
             if not self.optimized or not padded.is_cuda or self.model.training:
@@ -127,7 +127,7 @@ class MimiDecoder:
                     # Keep the first-audio bucket resident across long requests.
                     # Two additional shapes bound retained decoder graph memory.
                     if len(self.prefix_graphs) >= 3:
-                        victim = next(k for k in self.prefix_graphs if k[0][-1] != 16)
+                        victim = next(k for k in self.prefix_graphs if k[0][-1] != 4)
                         self.prefix_graphs.pop(victim).close()
                     self.prefix_graphs[key] = GraphedCall(
                         lambda value: self.model.decode(value).audio_values, padded
@@ -242,7 +242,7 @@ class Pipeline:
         return prepare_inputs(self.processor, prompt=prompt, text=text, audio=audio)
 
     @torch.inference_mode()
-    def generate(self, inputs, *, on_audio=None, chunk_frames=4, streaming_mode="prefix", **kwargs):
+    def generate(self, inputs, *, on_audio=None, chunk_frames=1, streaming_mode="prefix", **kwargs):
         """Return (text, 24 kHz mono waveform, raw generation output).
 
         Supply ``on_audio(cpu_float32_chunk)`` to receive owned chunks of shape
@@ -255,8 +255,8 @@ class Pipeline:
         """
         stream = None
         if on_audio is not None:
-            if self.backend != "transformers" or not isinstance(self.decoder, MimiDecoder):
-                raise ValueError("Audio streaming requires backend='transformers' and codec='fast-mimi'.")
+            if not isinstance(self.decoder, MimiDecoder):
+                raise ValueError("Audio streaming requires codec='fast-mimi'.")
             if not callable(on_audio):
                 raise TypeError("on_audio must be callable.")
             if type(chunk_frames) is not int or chunk_frames < 1:
@@ -276,9 +276,10 @@ class Pipeline:
                 )
             )
         sample_prefixes = stream is not None and streaming_mode == "prefix"
+        hook_sampler = sample_prefixes and self.backend == "transformers"
         with fp32_precision() if self.strict else nullcontext():
-            original_sample = self.model._sample_audio_frame if sample_prefixes else None
-            if sample_prefixes:
+            original_sample = self.model._sample_audio_frame if hook_sampler else None
+            if hook_sampler:
 
                 def sample(*args, **options):
                     frame = original_sample(*args, **options)
@@ -286,10 +287,12 @@ class Pipeline:
                     return frame
 
                 self.model._sample_audio_frame = sample
+            elif sample_prefixes:
+                kwargs["on_audio_frame"] = stream.append
             try:
                 output = self.model.generate(**inputs.to("cuda"), **kwargs)
             finally:
-                if sample_prefixes:
+                if hook_sampler:
                     self.model._sample_audio_frame = original_sample
             codes = decodable_codes(output.audio_codes)
             if sample_prefixes:
