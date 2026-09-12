@@ -5,16 +5,20 @@ transcription. FP32 by default, with FP16/BF16 and audio streaming support.
 
 ## Time to first audio (TTFA)
 
-| Measurement | FP32 full decode | FP16 streaming | BF16 streaming | FP32 streaming |
-| --- | ---: | ---: | ---: | ---: |
-| TTFA median | 326.03 ms | 75.10 ms | 74.68 ms | **62.45 ms** |
-| TTFA p95 | 327.29 ms | 75.89 ms | 75.25 ms | **63.20 ms** |
-| TTFA speedup | 1x | 4.34x | 4.37x | **5.22x** |
+| Model precision | [Liquid Audio (original)](https://github.com/Liquid4All/liquid-audio/tree/19e65845923a7f136442c95137884ec61eb386aa) | **Fast LFM Audio (ours)** | **TTFA speedup** |
+| --- | ---: | ---: | ---: |
+| FP32 | 232.54 ms | **62.45 ms** | **3.72x** |
+| FP16 | 223.94 ms | **75.10 ms** | **2.98x** |
+| BF16 | 224.53 ms | **74.68 ms** | **3.01x** |
 
-RTX 5070 Ti, batch one, 4.904-second input, 64-token budget, 30 warm requests.
+Median TTFA on RTX 5070 Ti, batch one: same checkpoint, 4.904-second input,
+64-token budget, 30 warm requests per mode. **Both repos stream 320 ms audio chunks.**
 TTFA measures request start to the first CPU audio chunk, including preprocessing
 and GPU-to-CPU transfer. Recording, network, model startup, and speaker latency
 are excluded. First use requires warmup.
+
+Precision refers to the model. Original Mimi uses FP32 with TF32 disabled; our
+FP16/BF16 modes use a mixed BF16/FP32 decoder. Outputs can differ between repos.
 
 ## Setup
 
