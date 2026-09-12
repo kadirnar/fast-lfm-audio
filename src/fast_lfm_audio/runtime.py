@@ -2,11 +2,14 @@
 
 One optimized model serves one request at a time. Weights must stay on the same
 CUDA device and dtype after optimization. Prefill uses the original dynamic
-cache; only single-token decoding uses a preallocated static cache.
+cache. The FP16/BF16 path uses a preallocated static decode cache; strict FP32
+retains the original dynamic cache and captures its exact shapes.
 """
 
+import gc
 import os
 import types
+import weakref
 
 import torch
 from torch.nn.attention.varlen import varlen_attn
@@ -17,23 +20,57 @@ from transformers.models.lfm2.modeling_lfm2 import apply_rotary_pos_emb
 
 class GraphedCall:
     def __init__(self, function, example):
+        from cuda.bindings import runtime as cuda_runtime
+
         # Graphs keep device addresses, not Python references to closure tensors.
         self.function = function
         self.input = example.clone()
-        stream = torch.cuda.Stream(device=example.device)
+        # PyTorch's stream pool cycles through a fixed set of CUDA streams.
+        # On this runtime graph.reset() clears cuBLAS workspaces for its stream.
+        # Each live graph therefore needs its own stream: evicting one must not
+        # free another graph's captured cuBLAS workspace.
+        with torch.cuda.device(example.device):
+            status, raw_stream = cuda_runtime.cudaStreamCreateWithFlags(cuda_runtime.cudaStreamNonBlocking)
+            if status != cuda_runtime.cudaError_t.cudaSuccess:
+                raise RuntimeError(f"CUDA stream creation failed: {status}")
+        stream = torch.cuda.ExternalStream(int(raw_stream), device=example.device)
+        self.graph = torch.cuda.CUDAGraph()
+        self._finalizer = weakref.finalize(
+            self, _release_graph, self.graph, cuda_runtime, raw_stream, example.device
+        )
         stream.wait_stream(torch.cuda.current_stream(example.device))
         with torch.cuda.stream(stream):
             for _ in range(3):
                 function(self.input)
         torch.cuda.current_stream(example.device).wait_stream(stream)
-        self.graph = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(self.graph, stream=stream):
-            self.output = function(self.input)
+        # Collecting an older cyclic graph during capture can invoke CUDA graph
+        # destruction, which CUDA forbids inside the capture region.
+        collect = gc.isenabled()
+        gc.disable()
+        try:
+            with torch.cuda.graph(self.graph, stream=stream):
+                self.output = function(self.input)
+        finally:
+            if collect:
+                gc.enable()
 
     def __call__(self, value):
         self.input.copy_(value)
         self.graph.replay()
         return self.output
+
+    def close(self):
+        self.function = None
+        self._finalizer()
+
+
+def _release_graph(graph, cuda_runtime, stream, device):
+    with torch.cuda.device(device):
+        torch.cuda.synchronize(device)
+        graph.reset()
+        (status,) = cuda_runtime.cudaStreamDestroy(stream)
+        if status != cuda_runtime.cudaError_t.cudaSuccess:
+            raise RuntimeError(f"CUDA stream destruction failed: {status}")
 
 
 @torch.library.custom_op("fast_lfm_audio::mean_last_dim", mutates_args=())
@@ -64,7 +101,7 @@ def _depth_backend(graph, inputs):
 
 
 def depth_graph(function, example):
-    """Fuse greedy depth operations, preserving reductions and BF16 rounding points."""
+    """Fuse greedy depth operations, preserving reductions and precision casts."""
     if os.environ.get("FAST_LFM_COMPILE_DEPTH", "1") != "0":
         # Build lazy complex rotary buffers with the original operations, outside the compiler.
         function(example)
@@ -241,8 +278,12 @@ class Optimization:
         del self.model._fast_lfm_optimization
 
 
-def optimize(model, *, backbone=True, depth=True, max_cache_len=2048):
-    """Optimize a loaded, evaluated PR-48249 model in place; return a restore handle."""
+def optimize(model, *, backbone=True, depth=True, max_cache_len=2048, strict=None):
+    """Optimize in place; FP32 defaults to strict fusion with the original gradient path.
+
+    Reduced-precision graphs support FP16 and BF16 inference.
+    Strict mode preserves the original backbone attention and dynamic cache shapes.
+    """
     if model.training:
         raise ValueError("Call model.eval() before enabling inference graphs.")
     if next(model.parameters()).device.type != "cuda":
@@ -251,6 +292,22 @@ def optimize(model, *, backbone=True, depth=True, max_cache_len=2048):
         raise ValueError("max_cache_len must be at least 16.")
     if hasattr(model, "_fast_lfm_optimization"):
         raise ValueError("This model is already optimized.")
-    handle = Optimization(model, backbone=backbone, depth=depth, max_cache_len=max_cache_len)
+    if strict is None:
+        strict = next(model.parameters()).dtype == torch.float32
+    if strict:
+        from .strict import StrictOptimization
+
+        if any(
+            parameter.is_floating_point() and parameter.dtype != torch.float32
+            for parameter in model.parameters()
+        ):
+            raise ValueError("Strict mode requires FP32 model parameters; load with dtype=torch.float32.")
+        handle = StrictOptimization(model, backbone=backbone, depth=depth, max_cache_len=max_cache_len)
+    else:
+        if next(model.parameters()).dtype == torch.float32 and backbone:
+            raise ValueError(
+                "FP32 backbone decoding requires strict=True; the legacy attention kernel uses BF16/FP16."
+            )
+        handle = Optimization(model, backbone=backbone, depth=depth, max_cache_len=max_cache_len)
     model._fast_lfm_optimization = handle
     return handle

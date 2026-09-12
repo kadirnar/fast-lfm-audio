@@ -1,5 +1,7 @@
 """Prompt preparation and waveform decoding for the optimized model."""
 
+from collections import OrderedDict
+from contextlib import nullcontext
 from pathlib import Path
 
 import fast_mimi
@@ -7,7 +9,8 @@ import torch
 from huggingface_hub import snapshot_download
 from transformers import Lfm2AudioForConditionalGeneration, Lfm2AudioProcessor, MimiModel
 
-from .runtime import optimize
+from .runtime import GraphedCall, optimize
+from .strict import ExactModules, fp32_precision
 
 MODEL_ID = "LiquidAI/LFM2.5-Audio-1.5B"
 MODEL_REVISION = "c362a0625dfe45aa588dce5f0ada28a7e5707628"
@@ -22,7 +25,7 @@ def model_path(model_id=MODEL_ID):
 
 
 def prepare_inputs(processor, *, prompt, text=None, audio=None):
-    """Build the same GPU-preprocessed request for inference and benchmarks."""
+    """Build a GPU-preprocessed request for text or audio inference."""
     if (text is None) == (audio is None):
         raise ValueError("Provide exactly one of text or audio.")
     if text is not None and not text.strip():
@@ -50,13 +53,26 @@ def decodable_codes(codes):
 
 
 class MimiDecoder:
-    """Decode eight codebooks, reusing graphs for power-of-two frame lengths."""
+    """Decode eight codebooks with exact frame lengths in strict FP32 mode."""
 
-    def __init__(self, *, optimized=True, dtype="fp16", device="cuda", bucketed=True):
-        self.model = MimiModel.from_pretrained("kyutai/mimi", revision=MIMI_REVISION).to(device).eval()
-        self.bucketed = optimized and bucketed
+    def __init__(self, *, optimized=True, dtype="fp16", device="cuda", bucketed=True, strict=None):
+        if strict is None:
+            strict = dtype in ("fp32", "float32", torch.float32)
+        if strict and dtype not in ("fp32", "float32", torch.float32):
+            raise ValueError("Strict Mimi decoding requires dtype='fp32'.")
+        self.model = (
+            MimiModel.from_pretrained("kyutai/mimi", revision=MIMI_REVISION, dtype=torch.float32)
+            .to(device)
+            .eval()
+        )
+        self.strict = strict
+        self.optimized = optimized
+        self.graphs = OrderedDict()
+        self.prefix_graphs = OrderedDict()
+        self.exact_modules = ExactModules(self.model) if optimized and strict else None
+        self.bucketed = optimized and bucketed and not strict
         self.samples_per_frame = round(self.model.config.sampling_rate / self.model.config.frame_rate)
-        if optimized:
+        if optimized and not strict:
             fast_mimi.optimize(self.model, dtype=dtype)
 
     @torch.inference_mode()
@@ -64,18 +80,75 @@ class MimiDecoder:
         frames = codes.shape[-1]
         if frames == 0:
             return torch.empty((1, 0), device=codes.device)
+        if self.strict:
+            with fp32_precision():
+                if not self.optimized or not codes.is_cuda or self.model.training:
+                    waveform = self.model.decode(codes).audio_values
+                else:
+                    key = (codes.shape, codes.stride(), codes.dtype, codes.device)
+                    if key not in self.graphs:
+                        # Exact frame lengths retain convolution and attention shapes.
+                        # Bound retained graph memory for requests with varying lengths.
+                        if len(self.graphs) >= 2:
+                            self.graphs.popitem(last=False)
+                        self.graphs[key] = GraphedCall(
+                            lambda value: self.model.decode(value).audio_values, codes
+                        )
+                    self.graphs.move_to_end(key)
+                    waveform = self.graphs[key](codes)
+                return waveform[:, 0, : frames * self.samples_per_frame].clone()
         if self.bucketed:
-            # Mimi is causal: right-padding cannot affect preceding real samples.
+            # Right-padding retains causal context. Different bucket shapes can
+            # still change floating-point rounding, so strict mode never pads.
             bucket = max(16, 1 << (frames - 1).bit_length())
             codes = torch.nn.functional.pad(codes, (0, bucket - frames))
         # Extra kwargs (including return_dict=True) trigger fast-mimi's eager fallback.
         return self.model.decode(codes).audio_values[:, 0, : frames * self.samples_per_frame].clone()
 
     @torch.inference_mode()
+    def decode_prefix(self, codes):
+        """Decode available codes for early delivery, retaining FP32 arithmetic.
+
+        Padding changes reference operation shapes and can change waveform bits.
+        This entry point is used only when prefix streaming is requested; normal
+        strict decoding continues to use the exact, unpadded frame count.
+        """
+        if not self.strict or not codes.shape[-1]:
+            return self(codes)
+        frames = codes.shape[-1]
+        bucket = max(16, 1 << (frames - 1).bit_length())
+        padded = torch.nn.functional.pad(codes, (0, bucket - frames))
+        with fp32_precision():
+            if not self.optimized or not padded.is_cuda or self.model.training:
+                waveform = self.model.decode(padded).audio_values
+            else:
+                key = (padded.shape, padded.stride(), padded.dtype, padded.device)
+                if key not in self.prefix_graphs:
+                    # Keep the first-audio bucket resident across long requests.
+                    # Two additional shapes bound retained decoder graph memory.
+                    if len(self.prefix_graphs) >= 3:
+                        victim = next(k for k in self.prefix_graphs if k[0][-1] != 16)
+                        self.prefix_graphs.pop(victim).close()
+                    self.prefix_graphs[key] = GraphedCall(
+                        lambda value: self.model.decode(value).audio_values, padded
+                    )
+                self.prefix_graphs.move_to_end(key)
+                waveform = self.prefix_graphs[key](padded)
+            return waveform[:, 0, : frames * self.samples_per_frame].clone()
+
+    @torch.inference_mode()
     def warmup(self, frame_lengths=(64, 128, 256, 512)):
         for frames in frame_lengths:
             self(torch.zeros((1, 8, frames), device=self.model.device, dtype=torch.long))
         torch.cuda.synchronize(self.model.device)
+
+    def close(self):
+        self.graphs.clear()
+        self.prefix_graphs.clear()
+        if self.exact_modules is not None:
+            self.exact_modules.close()
+        if self.strict:
+            self.optimized = False
 
 
 class Pipeline:
@@ -89,25 +162,53 @@ class Pipeline:
         codec="fast-mimi",
         backbone=True,
         max_cache_len=2048,
+        dtype="fp32",
+        strict=None,
     ):
         if backend not in ("transformers", "vllm", "sglang"):
             raise ValueError("backend must be 'transformers', 'vllm', or 'sglang'.")
         if codec not in ("fast-mimi", "lfm"):
             raise ValueError("codec must be 'fast-mimi' or 'lfm'.")
+        dtypes = {
+            "fp32": torch.float32,
+            "float32": torch.float32,
+            "fp16": torch.float16,
+            "float16": torch.float16,
+            "bf16": torch.bfloat16,
+            "bfloat16": torch.bfloat16,
+        }
+        dtype = dtypes.get(dtype, dtype)
+        if dtype not in (torch.float32, torch.float16, torch.bfloat16):
+            raise ValueError("dtype must be 'fp32', 'fp16', or 'bf16'.")
+        self.strict = dtype == torch.float32 if strict is None else strict
+        if self.strict and dtype != torch.float32:
+            raise ValueError("Strict mode requires dtype='fp32'.")
+        if backend != "transformers" and dtype != torch.bfloat16:
+            raise ValueError(
+                "Strict FP32 uses backend='transformers'. Native audio adapters currently require dtype='bf16'."
+            )
+        if dtype == torch.float32 and not self.strict:
+            raise ValueError("The FP32 pipeline requires strict=True.")
         path = model_path(model_id)
         self.processor = Lfm2AudioProcessor.from_pretrained(path)
         self.backend = backend
         if backend == "transformers":
             self.model = Lfm2AudioForConditionalGeneration.from_pretrained(
-                path, dtype=torch.bfloat16, device_map="cuda"
+                path, dtype=dtype, device_map="cuda"
             ).eval()
-            self.optimization = optimize(self.model, backbone=backbone, max_cache_len=max_cache_len)
+            self.optimization = optimize(
+                self.model, backbone=backbone, max_cache_len=max_cache_len, strict=self.strict
+            )
         else:
             from .backends.model import NativeGenerator
 
             self.model = NativeGenerator(path, backend, max_cache_len, graphs=backbone)
         try:
-            self.decoder = MimiDecoder() if codec == "fast-mimi" else self.processor.decode_audio
+            self.decoder = (
+                MimiDecoder(dtype="fp32" if self.strict else "fp16", strict=self.strict)
+                if codec == "fast-mimi"
+                else self.processor.decode_audio
+            )
         except BaseException:
             self.close()
             raise
@@ -141,17 +242,73 @@ class Pipeline:
         return prepare_inputs(self.processor, prompt=prompt, text=text, audio=audio)
 
     @torch.inference_mode()
-    def generate(self, inputs, **kwargs):
-        """Return (text, 24 kHz mono waveform, raw generation output)."""
-        output = self.model.generate(**inputs.to("cuda"), **kwargs)
-        codes = decodable_codes(output.audio_codes)
-        waveform = self.decoder(codes) if codes.shape[-1] else torch.empty((1, 0), device="cuda")
-        text = self.processor.tokenizer.decode(output.sequences[0], skip_special_tokens=True)
-        return text, waveform, output
+    def generate(self, inputs, *, on_audio=None, chunk_frames=4, streaming_mode="prefix", **kwargs):
+        """Return (text, 24 kHz mono waveform, raw generation output).
+
+        Supply ``on_audio(cpu_float32_chunk)`` to receive owned chunks of shape
+        (1, samples). Prefixes are delivered during generation, including FP32.
+        FP32 arithmetic and model tokens are retained, but early decoder shapes
+        can change waveform rounding. Use ``streaming_mode="buffered"`` to wait
+        for the exact full waveform before sending chunks.
+        Chunks concatenate to the returned waveform. The callback should enqueue
+        promptly: blocking playback also blocks this request.
+        """
+        stream = None
+        if on_audio is not None:
+            if self.backend != "transformers" or not isinstance(self.decoder, MimiDecoder):
+                raise ValueError("Audio streaming requires backend='transformers' and codec='fast-mimi'.")
+            if not callable(on_audio):
+                raise TypeError("on_audio must be callable.")
+            if type(chunk_frames) is not int or chunk_frames < 1:
+                raise ValueError("chunk_frames must be a positive integer.")
+            if streaming_mode not in ("prefix", "buffered"):
+                raise ValueError("streaming_mode must be 'prefix' or 'buffered'.")
+            from .streaming import BufferedAudioStream, PrefixAudioStream
+
+            stream = (
+                BufferedAudioStream(on_audio, chunk_frames * self.decoder.samples_per_frame)
+                if streaming_mode == "buffered"
+                else PrefixAudioStream(
+                    self.decoder.decode_prefix if self.strict else self.decoder,
+                    on_audio,
+                    chunk_frames,
+                    self.model.config.audio_eos_token_id,
+                )
+            )
+        sample_prefixes = stream is not None and streaming_mode == "prefix"
+        with fp32_precision() if self.strict else nullcontext():
+            original_sample = self.model._sample_audio_frame if sample_prefixes else None
+            if sample_prefixes:
+
+                def sample(*args, **options):
+                    frame = original_sample(*args, **options)
+                    stream.append(frame)
+                    return frame
+
+                self.model._sample_audio_frame = sample
+            try:
+                output = self.model.generate(**inputs.to("cuda"), **kwargs)
+            finally:
+                if sample_prefixes:
+                    self.model._sample_audio_frame = original_sample
+            codes = decodable_codes(output.audio_codes)
+            if sample_prefixes:
+                waveform = stream.finish_codes(codes, self.decoder.samples_per_frame)
+            else:
+                waveform = self.decoder(codes) if codes.shape[-1] else torch.empty((1, 0), device="cuda")
+                if stream is not None:
+                    waveform = stream.finish(waveform)
+            text = self.processor.tokenizer.decode(output.sequences[0], skip_special_tokens=True)
+            return text, waveform, output
 
     def close(self):
         if self.backend != "transformers":
             self.model.close()
+        elif hasattr(self, "optimization") and hasattr(self.model, "_fast_lfm_optimization"):
+            self.optimization.close()
+        close_decoder = getattr(getattr(self, "decoder", None), "close", None)
+        if close_decoder is not None:
+            close_decoder()
 
     def __enter__(self):
         return self

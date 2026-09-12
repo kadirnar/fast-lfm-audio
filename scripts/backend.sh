@@ -6,7 +6,7 @@ backend="${1:-}"
 case "$backend" in
     vllm) environment=vendor/envs/vllm; python_version=3.13; package=vllm==0.29.0 ;;
     sglang) environment=vendor/envs/sglang-py312; python_version=3.12; package=sglang==0.5.19 ;;
-    *) printf 'Usage: bash scripts/backend.sh {vllm|sglang} [--setup|--benchmark|inference options]\n' >&2; exit 2 ;;
+    *) printf 'Usage: bash scripts/backend.sh {vllm|sglang} [--setup|inference options]\n' >&2; exit 2 ;;
 esac
 shift
 
@@ -48,8 +48,4 @@ export FAST_LFM_NATIVE_BACKEND="$backend"
 export VLLM_USE_FLASHINFER_SAMPLER=0
 export VLLM_WORKER_MULTIPROC_METHOD=spawn
 
-if [[ "${1:-}" == --benchmark ]]; then
-    shift
-    exec "$environment/bin/python" -m benchmarks.benchmark --engine "$backend" "$@"
-fi
-exec "$environment/bin/python" -m fast_lfm_audio.cli --backend "$backend" "$@"
+exec "$environment/bin/python" -m fast_lfm_audio.cli --backend "$backend" --dtype bf16 "$@"

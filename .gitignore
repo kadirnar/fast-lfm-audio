@@ -1,7 +1,6 @@
 .venv/
 vendor/
 __pycache__/
-.pytest_cache/
 .ruff_cache/
 *.egg-info/
 *.wav
@@ -11,8 +10,3 @@ __pycache__/
 .env.*
 dist/
 build/
-experiments/
-results/**/smoke/
-results/smoke/
-results/split1/
-results/verification/

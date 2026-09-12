@@ -5,9 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fast-lfm-audio"
 version = "0.1.0"
-description = "CUDA graph inference for LFM2.5 Audio using Transformers PR 48249 and fast-mimi"
+description = "Triton and CUDA graph inference with audio streaming for LFM2.5 Audio"
+readme = "README.md"
+license-files = ["LICENSES/*.txt", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.12"
-dependencies = ["torch>=2.13", "transformers>=5.16.0.dev0", "fast-mimi", "accelerate", "huggingface-hub", "soundfile", "filelock", "safetensors"]
+dependencies = ["torch>=2.13", "triton>=3.7", "cuda-bindings>=13", "transformers>=5.16.0.dev0", "fast-mimi", "accelerate", "huggingface-hub", "librosa>=1.0", "soundfile", "filelock", "safetensors"]
 
 [project.scripts]
 fast-lfm-audio = "fast_lfm_audio.cli:main"
@@ -23,7 +25,3 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 110
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]

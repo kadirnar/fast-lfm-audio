@@ -8,5 +8,6 @@ if os.environ.get("FAST_LFM_NATIVE_BACKEND") == "sglang":
 
 from .pipeline import Pipeline
 from .runtime import optimize
+from .strict import fp32_precision
 
-__all__ = ["Pipeline", "optimize"]
+__all__ = ["Pipeline", "fp32_precision", "optimize"]

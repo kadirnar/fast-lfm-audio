@@ -17,12 +17,20 @@ def main():
     parser.add_argument("--voice", choices=VOICES, default="UK female")
     parser.add_argument("--output", type=Path, default=Path("output.wav"))
     parser.add_argument("--codec", choices=("fast-mimi", "lfm"), default="fast-mimi")
+    parser.add_argument(
+        "--dtype",
+        choices=("fp32", "fp16", "bf16"),
+        default="fp32",
+        help="FP32 uses strict Triton fusion; FP16/BF16 use reduced-precision inference.",
+    )
     parser.add_argument("--max-new-tokens", type=int, default=512)
     parser.add_argument("--max-cache-len", type=int, default=2048)
     parser.add_argument("--depth-only", action="store_true")
     parser.add_argument("--audio-temperature", type=float, default=0.0)
     parser.add_argument("--audio-top-k", type=int, default=1)
     args = parser.parse_args()
+    if args.backend != "transformers" and args.dtype != "bf16":
+        parser.error("Native audio adapters require --dtype bf16; strict FP32 uses --backend transformers")
     if args.task == "asr" and args.audio is None:
         parser.error("--audio is required for ASR")
     if args.task == "tts" and args.audio is not None:
@@ -35,7 +43,11 @@ def main():
         args.text = "Hello, this is a test of fast audio generation."
     torch.set_num_threads(4)
     with Pipeline(
-        backend=args.backend, codec=args.codec, backbone=not args.depth_only, max_cache_len=args.max_cache_len
+        backend=args.backend,
+        codec=args.codec,
+        backbone=not args.depth_only,
+        max_cache_len=args.max_cache_len,
+        dtype=args.dtype,
     ) as pipeline:
         text, waveform, output = pipeline(
             task=args.task,
@@ -50,7 +62,12 @@ def main():
         print(text)
     if waveform.numel():
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(args.output, waveform[0].float().cpu().numpy(), 24000)
+        sf.write(
+            args.output,
+            waveform[0].float().cpu().numpy(),
+            24000,
+            subtype="FLOAT" if args.dtype == "fp32" else None,
+        )
         print(f"Audio: {args.output.resolve()} ({waveform.shape[-1] / 24000:.2f} s)")
     if output.modalities.shape[-1] == args.max_new_tokens:
         print("Token limit reached; output may be incomplete.")
